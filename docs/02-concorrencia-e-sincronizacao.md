@@ -11,7 +11,7 @@
 | `http-N` | até 32 | atende requisições (notificar, confirmar, redespachar, consultar, declarar janela) | **tudo** |
 | `ingestao-N` | 4 | consome a fila, calcula hora limite, grava pedido e tenta despachar | notificações, restaurantes, pedidos, agendas, trânsito (leitura) |
 | `recalculo` | 1 | revisa pedidos quando o trânsito muda | restaurantes, pedidos, trânsito (leitura) |
-| `despacho` | 1 | tenta atribuir entregador aos pedidos em espera | restaurantes, pedidos, agendas |
+| `despacho` | 1 | enquanto houver vaga, atribui ao pedido em espera mais urgente | restaurantes, pedidos, agendas |
 | `monitor` | 1 | a cada 1 s, emite alertas de EM_RISCO/ATRASADO e varre a fila de espera | pedidos (nível de alerta), fila de espera |
 
 Ou seja: **até 41 threads** podem tocar as mesmas estruturas simultaneamente.
@@ -56,11 +56,11 @@ Duas notificações do mesmo restaurante chegam juntas; os dois workers fazem `p
 | 3 | | | revisa todos os pedidos existentes |
 | 4 | **grava** o pedido com v1 (11:35) ⇒ ficou fora da revisão, **limite errado** | | |
 
-**Solução (leitores-escritores):** o worker segura a **leitura** do `RWLock` desde a leitura do trânsito até gravar o pedido. A troca de trânsito pega a **escrita**, que espera todos os cálculos em curso terminarem. Assim, todo pedido gravado com a versão antiga já existe quando o recálculo começa, e todo pedido gravado depois já usa a nova. Cada pedido guarda `transito_versao`. **Prova:** `test_transito_muda_durante_ingestao` (10 janelas declaradas durante ~1.650 envios; a auditoria recalcula *sequencialmente* todos os pedidos e compara — zero divergências).
+**Solução (leitores-escritores):** o worker segura a **leitura** do `RWLock` desde a leitura do trânsito até gravar o pedido. A troca de trânsito pega a **escrita**, que espera todos os cálculos em curso terminarem. Assim, todo pedido gravado com a versão antiga já existe quando o recálculo começa, e todo pedido gravado depois já usa a nova. Cada pedido guarda `transito_versao`. **Prova:** `test_transito_muda_durante_ingestao` (10 janelas declaradas durante ~1.650 envios; a auditoria recalcula *sequencialmente* todos os pedidos e compara — zero divergências) e `test_janela_declarada_no_meio_do_calculo_nao_deixa_pedido_com_transito_velho`, que **força** a intercalação ruim: segura o cálculo por 0,3 s dentro da seção crítica enquanto a central declara o pico. Só o primeiro teste não bastava: tirando o lock de leitura, ele continuava passando (ver E15 no doc 05).
 
 ### R4 — Starvation do escritor
 
-Com ingestão contínua sempre há algum leitor ativo; um RWLock ingênuo nunca daria vez à atualização do trânsito. **Solução:** `RWLock` com **preferência para escritor**: havendo escritor esperando, novos leitores aguardam (`rota/rwlock.py`). **Prova:** `TestRWLock` (escritor nunca convive com leitor).
+Com ingestão contínua sempre há algum leitor ativo; um RWLock ingênuo nunca daria vez à atualização do trânsito. **Solução:** `RWLock` com **preferência para escritor**: havendo escritor esperando, novos leitores aguardam (`rota/rwlock.py`). **Prova:** `TestRWLock`: `test_escritor_exclusivo_e_leitores_simultaneos` (o escritor nunca convive com leitor) e `test_escritor_nao_passa_fome_com_leitores_sobrepostos` (4 leitores escalonados mantêm sempre algum leitor ativo; o escritor precisa entrar em até 2 s). Antes só existia o primeiro, que prova exclusão mas **não** a preferência para o escritor.
 
 ### R5 — Despachar além da capacidade do entregador (a corrida específica deste domínio)
 
@@ -69,7 +69,7 @@ Com ingestão contínua sempre há algum leitor ativo; um RWLock ingênuo nunca 
 | 1 | vê agenda do João com 3/4 vagas ocupadas | vê agenda do João com 3/4 vagas ocupadas (ainda não gravou) |
 | 2 | atribui X ao João → 4/4 | atribui Y ao João → **5/4: capacidade estourada** |
 
-É o risco mais específico deste domínio: o entregador é um recurso físico com capacidade limitada. **Solução:** ranking por tamanho de agenda é feito **sem** lock (só para ordenar candidatos — pode estar levemente desatualizado), mas a decisão final — checar `len(agenda) < capacidade` e inserir — acontece **sob o lock daquele entregador** (`_tentar_atribuir`), sempre chamada com o lock do restaurante (L2) já em mãos e segurando **no máximo um** lock de entregador (L3) por vez. Se o candidato encheu entre o ranking e a checagem, a função simplesmente tenta o próximo. **Prova:** a auditoria confere `len(agenda) <= capacidade` para todo entregador em toda execução; `test_capacidade_limita_atribuicao_e_fila_de_espera` e `test_redespacho_respeita_capacidade`.
+É o risco mais específico deste domínio: o entregador é um recurso físico com capacidade limitada. **Solução:** ranking por tamanho de agenda é feito **sem** lock (só para ordenar candidatos — pode estar levemente desatualizado), mas a decisão final — checar `len(agenda) < capacidade` e inserir — acontece **sob o lock daquele entregador** (`_tentar_atribuir`), sempre chamada com o lock do restaurante (L2) já em mãos e segurando **no máximo um** lock de entregador (L3) por vez. Se o candidato encheu entre o ranking e a checagem, a função simplesmente tenta o próximo. **Prova:** a auditoria confere `len(agenda) <= capacidade` para todo entregador em toda execução; `test_capacidade_limita_atribuicao_e_fila_de_espera` e `test_redespacho_respeita_capacidade` (sequenciais) e `test_capacidade_nao_estoura_com_atribuicoes_simultaneas`, em que 8 pedidos de restaurantes diferentes disputam 2 vagas com o `len` da agenda deliberadamente lento (alarga a janela entre checar e atribuir).
 
 ### R6 — Deadlock no redespacho cruzado
 
@@ -88,7 +88,7 @@ Se a remoção da agenda de origem e a inclusão na de destino não forem atômi
 
 ### R8 — Confirmar entrega × redespachar o mesmo pedido
 
-Um entregador confirma a entrega enquanto o despachante redireciona o pedido para outro. **Solução:** ambas as operações pegam primeiro o **lock do restaurante** (L2) — ficam serializadas; quem chega depois vê o estado novo (redespachar um pedido já entregue → 409; confirmar sendo quem deixou de ser responsável → 409). **Prova:** `test_confirmar_e_redespachar_ao_mesmo_tempo`.
+Um entregador confirma a entrega enquanto o despachante redireciona o pedido para outro. **Solução:** ambas as operações pegam primeiro o **lock do restaurante** (L2) — ficam serializadas; quem chega depois vê o estado novo (redespachar um pedido já entregue → 409; confirmar sendo quem deixou de ser responsável → 409). **Prova:** `test_confirmar_e_redespachar_ao_mesmo_tempo` (20 threads) e `test_confirmar_nao_intercala_com_redespacho`, que congela a confirmação entre "conferir o responsável" e "liberar a vaga" e exige que o redespacho espere e receba 409.
 
 ### R9 — Confirmação no último minuto × atraso
 
@@ -169,6 +169,6 @@ Granularidade: com o GIL, locks mais finos que "por restaurante"/"por entregador
 ## 2.7 Estratégia de verificação
 
 1. **Testes de estresse** com `Barrier` (todas as threads colidem ao mesmo tempo) — `tests/test_concorrencia.py`.
-2. **Testes de mutação**: introduzimos os bugs de propósito (tirar a ordem dos locks; tirar a atomicidade da deduplicação; tirar a checagem de capacidade sob lock) e confirmamos que os testes **falham** — prova de que eles realmente detectam o problema.
+2. **Testes de mutação** (`python scripts/mutacoes.py`): injeta, numa cópia do código, 12 bugs de concorrência (dedup fora do lock, locks sem ordem, capacidade fora do lock, lock de leitura do trânsito ou do restaurante esquecido, RWLock sem preferência ao escritor, fila de espera sem urgência, desligamento fora de ordem etc.) e confirma que a suíte **falha** em cada um — prova de que os testes detectam o problema. A primeira rodada mostrou que só os testes de estresse não bastavam para 4 deles; por isso existem os testes de "janela alargada" (`TestJanelasAlargadas`), que forçam a intercalação ruim em vez de torcer para ela acontecer.
 3. **Auditoria de invariantes** (`GET /api/v1/auditoria`): congela o sistema e confere 1:1 notificações↔pedidos, agendas, capacidade, vínculos com restaurantes, consistência de `entregue_atrasado` e, quando ocioso, **compara cada pedido em aberto com um recálculo sequencial (oráculo)**.
 4. **Teste de carga** (`scripts/carga.py`): 50 notificadores + 4 entregadores + central simultâneos, terminando com a auditoria.

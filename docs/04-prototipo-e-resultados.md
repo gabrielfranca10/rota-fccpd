@@ -8,7 +8,7 @@ Requisito único: **Python 3.10 ou superior**. Nenhuma biblioteca externa (nada 
 No Windows, troque `python3` por `python`.
 
 ```bash
-# 1) testes automatizados (42 testes: unidade, estresse e HTTP)
+# 1) testes automatizados (50 testes: unidade, estresse e HTTP)
 python3 -m unittest discover -s tests -t .
 
 # 2) servidor (terminal 1) — relógio simulado permite "avançar o tempo" na demo
@@ -31,33 +31,48 @@ Parâmetros úteis do servidor: `--porta`, `--http-workers` (32), `--ingestao-wo
 > Máquina: Windows 11, Python 3.13. **Os números variam por máquina — rodem no computador de
 > vocês antes da apresentação e substituam esta seção pelos seus resultados.**
 
-**Testes automatizados** — 42 testes, todos passando; a suíte foi executada 6 vezes seguidas sem
+**Testes automatizados** — 50 testes, todos passando; a suíte foi executada várias vezes seguidas sem
 nenhuma falha intermitente. Os 5 testes acrescentados na revisão final (fila de espera por urgência,
 desligamento que drena o despacho, instante com `Z`/outro fuso e carimbo dos alertas) foram
 escritos **antes** da correção e falhavam no código antigo (ver E9 a E14 no doc 05).
 
-**Testes de mutação** — introduzimos os bugs de propósito no `rota/nucleo.py`, rodamos os testes,
-confirmamos que **falham**, e só então revertemos:
+**Testes de mutação** — `python scripts/mutacoes.py` injeta, um por vez e numa cópia do código, os
+bugs de concorrência que o projeto diz prevenir, roda a suíte 3 vezes e confere se algum teste falha.
+Uma mutação que a suíte não acusa seria um teste fraco. Resultado atual: **as 12 são detectadas.**
 
-| Bug injetado | Resultado (3 execuções) |
-|---|---|
-| Deduplicação verificando a impressão digital **fora** do lock, com uma pausa de 1 ms antes de reentrar para inserir | `test_mesma_notificacao_100_threads_gera_um_pedido` falhou nas 3 vezes: **23, 17 e 22** notificações "novas" em vez de 1 |
-| Redespacho travando a agenda de origem **sem ordenar** (removendo o `sorted(...)`) | `test_redespacho_cruzado_sem_deadlock` falhou nas 3 vezes com **"16 threads presas após 20 s (provável deadlock)"** |
+| # | Bug injetado | Detectado por |
+|---|---|---|
+| M1 | Deduplicação verificada **fora** do lock (pausa de 1 ms antes de inserir) | `test_mesma_notificacao_100_threads_gera_um_pedido`, `test_ingestao_em_massa_com_duplicatas`, `test_rajada_de_requisicoes_concorrentes` |
+| M2 | Redespacho travando as agendas **sem ordenar** (sem o `sorted`) | `test_redespacho_cruzado_sem_deadlock` (threads presas: deadlock) |
+| M3 | Capacidade do entregador checada **fora** do lock (pausa de 0,5 ms) | `test_capacidade_nao_estoura_com_atribuicoes_simultaneas` e mais 3 |
+| M3b | Lock do entregador esquecido em `_tentar_atribuir` (sem pausa) | `test_capacidade_nao_estoura_com_atribuicoes_simultaneas` |
+| M4 | Trânsito lido **sem** o lock de leitura na ingestão | `test_janela_declarada_no_meio_do_calculo_nao_deixa_pedido_com_transito_velho` |
+| M5 | `confirmar_entrega` **sem** o lock do restaurante | `test_confirmar_nao_intercala_com_redespacho`, `test_confirmar_e_redespachar_ao_mesmo_tempo` |
+| M6 | RWLock **sem** preferência para o escritor | `test_escritor_nao_passa_fome_com_leitores_sobrepostos` |
+| M7 | Fila de espera ignora a urgência | `test_vaga_liberada_vai_para_o_pedido_mais_urgente`, `test_varias_vagas_...` |
+| M8 | Pílulas do despacho enviadas antes de a ingestão terminar | `test_desligamento_drena_tambem_o_despacho` |
+| M9 | Entrega confirmada não libera a vaga do entregador | 8 testes, entre eles `test_confirmacao_de_entrega` |
+| M10 | Capacidade do redespacho não é conferida | `test_redespacho_respeita_capacidade` |
+| M11 | Fila cheia bloqueia em vez de devolver 503 | suíte trava (timeout): o teste `test_fila_cheia_devolve_sobrecarga_e_nao_registra` nunca termina |
 
-Achado interessante durante a preparação deste teste: a primeira versão do teste de deadlock usava
-só **1 restaurante** pra todos os pedidos — e a mutação **não era detectada**, porque o lock do
-restaurante (L2), sozinho, já serializava todo mundo antes de chegar nos locks de entregador (L3),
-escondendo a corrida que a ordenação deveria resolver. Corrigido espalhando os pedidos em **8
-restaurantes diferentes** (precisa de recursos independentes
-concorrendo de verdade para a corrida aparecer). Ver E1 no doc 05.
+Dois achados que só apareceram por causa desse teste (E1 e E15 no doc 05):
+
+* A primeira versão do teste de deadlock usava só **1 restaurante** para todos os pedidos, e a mutação
+  M2 **não era detectada**: o lock do restaurante (L2), sozinho, já serializava todo mundo antes de
+  chegar nos locks de entregador (L3), escondendo a corrida que a ordenação deveria resolver.
+  Corrigido espalhando os pedidos em **8 restaurantes diferentes**.
+* Na primeira rodada completa, **M3b, M4, M5 e M6 não eram detectadas**: os testes de estresse dependiam
+  de a troca de thread cair por acaso no meio do "verificar-e-agir", o que quase nunca acontece sob o
+  GIL. Foram acrescentados os testes de "janela alargada" (`TestJanelasAlargadas`), que forçam a
+  intercalação ruim de propósito, e um de starvation do escritor.
 
 **Demonstrações**
 
 ```
 $ python3 scripts/demo_corrida.py
 Mesma notificação recebida por 50 threads simultâneas. Pedidos criados (esperado: 1)
-  sem sincronização : 50   <- pedidos duplicados na agenda do entregador
-  rota (com lock)   : 1
+  sem sincronização (padrão ingênuo) : 50   <- pedidos duplicados na agenda do entregador
+  rota (Nucleo real, com lock)       : 1
 
 $ python3 scripts/demo_deadlock.py
 1) Cada thread trava primeiro a agenda de ORIGEM (espera circular):
@@ -67,6 +82,11 @@ $ python3 scripts/demo_deadlock.py
     ent-joao->ent-marcia: ok
     ent-marcia->ent-joao: ok
 ```
+
+O número da primeira linha varia a cada execução (entre ~35 e 50 nas nossas); a segunda é sempre 1.
+A linha "rota" chama o `Nucleo.receber_notificacao` de verdade. Já o deadlock é demonstrado com locks
+didáticos, porque o núcleo real está correto e não trava: quem prova que a ordenação é necessária é a
+mutação M2.
 
 Roteiro guiado (`scripts/demo.py`), resumido:
 

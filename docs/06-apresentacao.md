@@ -54,7 +54,7 @@ Não: nosso RWLock dá preferência a escritor — com escritor esperando, novos
 O ranking de "quem tem menos pedidos" é feito sem lock (só pra ordenar candidatos — pode estar levemente desatualizado). A decisão real — checar `len(agenda) < capacidade` e inserir — acontece sob o lock daquele entregador especificamente, e a função nunca segura dois locks de entregador ao mesmo tempo nesse caminho. Se o candidato encheu entre o ranking e a checagem, ela tenta o próximo. A auditoria confere `len(agenda) <= capacidade` pra todo entregador.
 
 **8. O que acontece com um pedido se nenhum entregador tem vaga?**
-Ele entra numa fila de espera (`_aguardando`) e um alerta é emitido. Quando alguém confirma uma entrega e libera vaga, o sistema tenta redespachar automaticamente pedidos em espera; o monitor também varre essa fila periodicamente como rede de segurança, então nenhum pedido fica esquecido.
+Ele entra numa fila de espera (`_aguardando`) e um alerta é emitido. Quando alguém confirma uma entrega e libera vaga, o despacho atribui a vaga ao pedido em espera **mais urgente** (menor hora limite, e não o primeiro da fila); o monitor também acorda o despacho periodicamente como rede de segurança, então nenhum pedido fica esquecido.
 
 **9. E se chegarem mais notificações do que o sistema processa?**
 Fila limitada a 1000. Cheia → `503` com `Retry-After: 1`; a notificação rejeitada não é registrada, então o reenvio funciona. Não bloqueamos a thread HTTP nem crescemos a memória sem limite.
@@ -75,7 +75,7 @@ Quatro camadas: testes de estresse com `Barrier`; testes de mutação (introduzi
 Com pool limitado, uma conexão parada seguraria uma thread. Fechando por resposta, a thread só fica ocupada durante o atendimento.
 
 **15. Como o desligamento evita perder notificações?**
-Para o accept, espera requisições em curso, marca "não aceitando" sob o mesmo lock do enfileiramento e coloca pílulas de veneno no fim de cada fila FIFO — todo trabalho aceito é processado antes.
+Para o accept, espera requisições em curso, marca "não aceitando" sob o mesmo lock do enfileiramento e coloca pílulas de veneno no fim da fila de ingestão (FIFO: todo trabalho aceito é processado antes) e só depois que a ingestão termina manda as pílulas do despacho e do recálculo, porque a ingestão ainda gera trabalho para eles.
 
 **16. O que muda quando for distribuído?**
 Fila vira durável; ingestão vira *at-least-once* com consumidor idempotente (a impressão digital já resolve); restaurante vira partição com nó dono; `calcular_hora_limite` vira RPC gRPC; alertas viram stream `AcompanharPedidosEmRisco`.
