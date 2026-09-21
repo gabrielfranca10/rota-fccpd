@@ -26,7 +26,7 @@
 
 * Base: `/api/v1` (versão na URL para evoluir sem quebrar clientes).
 * Corpo: JSON UTF-8 com `Content-Type: application/json` (outro tipo → `415`); limite de 256 KB (`413`); `Content-Length` obrigatório em POST (`411`).
-* Instantes: ISO 8601 com fuso (`2026-09-21T11:00:00-03:00`) — granularidade de **minuto**, diferente de um domínio de dias úteis.
+* Instantes: ISO 8601 com fuso (`2026-09-21T11:00:00-03:00`) — granularidade de **minuto**, diferente de um domínio de dias úteis. O sufixo `Z` (UTC) é aceito e qualquer fuso é convertido para o horário de Brasília: `14:00:00Z` e `11:00:00-03:00` são o mesmo instante e, portanto, a mesma notificação (mesma impressão digital). Sem fuso, vale Brasília.
 * IDs: `notif_<uuid4>`, `ped_<uuid4>` (não adivinháveis, gerados sem coordenação — funcionam igual quando houver vários nós).
 * Todo response traz `X-Request-Id` (ecoa o do cliente ou gera um) para rastrear uma requisição nos logs.
 * Timeout de leitura do socket: 15 s.
@@ -42,7 +42,7 @@
 |---|---|---|
 | 400 | `REQUISICAO_INVALIDA` | JSON malformado, campo faltando/inválido, formato de id/número de pedido errado |
 | 404 | `NAO_ENCONTRADO` / `ROTA_NAO_ENCONTRADA` | recurso ou rota inexistente |
-| 405 | `METODO_NAO_PERMITIDO` | rota existe, método não (`detalhes.permitidos`) |
+| 405 | `METODO_NAO_PERMITIDO` | rota existe, método não (`detalhes.permitidos`); vale também para `PUT`, `PATCH`, `DELETE` e `OPTIONS`, que a API não usa |
 | 409 | `CONFLITO` | estado não permite (já entregue, não é o responsável, capacidade esgotada, duplicidade de cadastro) |
 | 411 / 413 / 415 | `TAMANHO_OBRIGATORIO` / `CORPO_MUITO_GRANDE` / `TIPO_NAO_SUPORTADO` | problemas no corpo |
 | 503 | `SISTEMA_SOBRECARREGADO` | fila cheia ou desligando; vem com `Retry-After: 1` |
@@ -127,4 +127,4 @@ Os nomes (`hora_limite_entrega`, `hora_saida`, `minutos_restantes`, `fundamento`
 
 ## 3.8 Mensagens internas (futuras mensagens de rede)
 
-A mensagem da fila de ingestão hoje é o `notificacao_id`; o conteúdo da notificação é imutável após a criação. A fila de despacho carrega apenas `pedido_id` — sinalizando "tente atribuir este pedido agora", reprocessado sem custo caso já tenha sido atendido por outro caminho. Na Entrega 2, as mensagens viram os próprios objetos serializados (os campos já são tipos simples: strings, instantes ISO, inteiros, booleanos), sem mudar os consumidores.
+A mensagem da fila de ingestão hoje é o `notificacao_id`; o conteúdo da notificação é imutável após a criação. A fila de despacho carrega apenas um **sinal** ("pode haver vaga"): quem recebe a vaga é sempre o pedido em espera mais urgente (menor hora limite), e não o que foi enfileirado primeiro. Sinal repetido não custa nada: sem vaga, o despacho encerra na primeira olhada. Na Entrega 2, as mensagens de ingestão viram os próprios objetos serializados (os campos já são tipos simples: strings, instantes ISO, inteiros, booleanos), sem mudar os consumidores.

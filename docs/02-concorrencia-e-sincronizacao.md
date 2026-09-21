@@ -114,7 +114,7 @@ Segurar um lock enquanto espera rede/disco congela todos que precisam dele. **So
 | 2 | | marca "aceitando = não" e enfileira as pílulas de veneno |
 | 3 | enfileira o job **depois** das pílulas ⇒ nenhum worker o processa: **pedido perdido** | |
 
-**Solução:** a flag `_aceitando` é lida e alterada sob o **mesmo** `_notif_lock` que protege o enfileiramento; as pílulas entram depois, e por ser FIFO todo trabalho aceito é processado antes. Ordem de desligamento: para o accept → espera requisições em curso → drena as três filas (ingestão, recálculo, despacho) → encerra workers. **Prova:** `test_desligado_rejeita_e_drena`.
+**Solução:** a flag `_aceitando` é lida e alterada sob o **mesmo** `_notif_lock` que protege o enfileiramento; as pílulas entram depois, e por ser FIFO todo trabalho aceito é processado antes. Ordem de desligamento: para o accept → espera requisições em curso → **drena a ingestão primeiro** → só então o recálculo e o despacho recebem a pílula e drenam o que a ingestão ainda gerou para eles → encerra workers. (Numa versão anterior as três pílulas entravam juntas: a ingestão ainda gerava trabalho para o despacho depois de ele já ter encerrado e centenas de itens ficavam sem processar; ver E11 no doc 05.) **Prova:** `test_desligado_rejeita_e_drena` e `test_desligamento_drena_tambem_o_despacho`.
 
 ### R14 — Contadores com atualização perdida
 
@@ -127,6 +127,10 @@ Se a API devolvesse o objeto `Pedido` ou uma lista interna, o `json.dumps` poder
 ### R16 — Relógio
 
 Horário de parede pode ser ajustado (NTP). **Solução:** datas civis de Brasília (UTC−3 fixo) para regras de SLA e `time.monotonic()` para medições/timeouts.
+
+### R17 — Vaga liberada vai para o pedido errado (inversão de prioridade na fila de espera)
+
+Quando um entregador confirma uma entrega, abre-se uma vaga e vários pedidos esperam por ela. Se a escolha depender da ordem de chegada na fila (ou da ordem arbitrária de um conjunto), a vaga pode ir para um pedido com folga enquanto outro, a poucos minutos de estourar o prazo, continua esperando — justamente o que o sistema existe para evitar. **Solução:** a fila de despacho carrega só um sinal ("pode haver vaga"); o worker olha se há vaga (leitura otimista, sem lock) e, havendo, escolhe o pedido em espera com a **menor hora limite** (`_mais_urgente_em_espera`, sob `_indice_lock`), trava o restaurante dele (L2) e só então decide, sob o lock do entregador (L3), se a vaga ainda existe. Um único sinal preenche todas as vagas abertas. A hora limite é lida sem o L2: um recálculo concorrente pode deixar o ranking levemente defasado, mas a atribuição em si continua sendo decidida sob os locks (R5). **Prova:** `test_vaga_liberada_vai_para_o_pedido_mais_urgente` e `test_varias_vagas_vao_para_os_mais_urgentes_em_ordem`. Os dois falhavam no código anterior (numa execução, a vaga foi para um pedido com prazo 19 min depois do mais urgente).
 
 ## 2.4 Hierarquia de locks (regra anti-deadlock)
 

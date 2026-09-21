@@ -8,7 +8,7 @@ Requisito único: **Python 3.10 ou superior**. Nenhuma biblioteca externa (nada 
 No Windows, troque `python3` por `python`.
 
 ```bash
-# 1) testes automatizados (37 testes: unidade, estresse e HTTP)
+# 1) testes automatizados (42 testes: unidade, estresse e HTTP)
 python3 -m unittest discover -s tests -t .
 
 # 2) servidor (terminal 1) — relógio simulado permite "avançar o tempo" na demo
@@ -31,9 +31,10 @@ Parâmetros úteis do servidor: `--porta`, `--http-workers` (32), `--ingestao-wo
 > Máquina: Windows 11, Python 3.13. **Os números variam por máquina — rodem no computador de
 > vocês antes da apresentação e substituam esta seção pelos seus resultados.**
 
-**Testes automatizados** — 37 testes, todos passando; a suíte foi executada 6 vezes seguidas sem
-nenhuma falha intermitente (uma sequência de 5 rodadas limpas após a suíte estabilizar, mais a
-rodada final de conferência).
+**Testes automatizados** — 42 testes, todos passando; a suíte foi executada 6 vezes seguidas sem
+nenhuma falha intermitente. Os 5 testes acrescentados na revisão final (fila de espera por urgência,
+desligamento que drena o despacho, instante com `Z`/outro fuso e carimbo dos alertas) foram
+escritos **antes** da correção e falhavam no código antigo (ver E9 a E14 no doc 05).
 
 **Testes de mutação** — introduzimos os bugs de propósito no `rota/nucleo.py`, rodamos os testes,
 confirmamos que **falham**, e só então revertemos:
@@ -55,7 +56,7 @@ concorrendo de verdade para a corrida aparecer). Ver E1 no doc 05.
 ```
 $ python3 scripts/demo_corrida.py
 Mesma notificação recebida por 50 threads simultâneas. Pedidos criados (esperado: 1)
-  sem sincronização : 39   <- pedidos duplicados na agenda do entregador
+  sem sincronização : 50   <- pedidos duplicados na agenda do entregador
   rota (com lock)   : 1
 
 $ python3 scripts/demo_deadlock.py
@@ -88,29 +89,35 @@ cerca de 3 700 distintas —, 4 entregadores confirmando e redespachando, e a ce
 janelas de trânsito no meio da rajada, contra um servidor recém-iniciado):
 
 ```
-requisições: 5404 em 25.39 s  ->  213 req/s
+requisições: 5406 em 13.19 s  ->  410 req/s
 operação          qtd   p50 ms   p95 ms   p99 ms   máx ms
-confirmar           3     70.4    183.9    194.0    196.6
-declarar_janela      3    241.0    260.2    261.9    262.4
-listar            393    264.4    374.3    395.3    492.5
-notificar        5000    256.2    369.0    390.5    604.6
-redespachar         5     75.1    298.4    324.5    331.0
+confirmar           8    103.2    116.4    118.2    118.6
+declarar_janela      3    145.4    175.2    177.9    178.6
+listar            392    131.9    167.7    195.8    222.4
+notificar        5000    129.9    167.6    201.9    230.7
+redespachar         3    100.3    109.0    109.7    109.9
 
 respostas por (operação, status HTTP):
-  confirmar     200 3          declarar_janela 202 3
-  listar        200 393        notificar 200 1284 | 202 3716
-  redespachar   200 2 | 409 3
+  confirmar     200 8          declarar_janela 202 3
+  listar        200 392        notificar 200 1284 | 202 3716
+  redespachar   200 1 | 409 2
 
 auditoria: ok = true, violações = 0, oráculo executado, trânsito v4,
-           3716 notificações -> 3716 pedidos (1:1), 3698 aguardando entregador
+           3716 notificações -> 3716 pedidos (1:1), 3693 aguardando entregador
 RESULTADO: OK — nenhuma falha e todas as invariantes preservadas
 ```
+
+Antes da revisão final (E10 no doc 05) o mesmo teste dava ~213 req/s e `notificar` com p50 de ~256 ms.
+A explicação mais provável, pela leitura do código (não medimos com profiler): cada pedido sem vaga fazia
+o worker de despacho travar o restaurante e tentar os 4 entregadores mesmo com todos cheios, disputando
+CPU e locks com a ingestão. Agora o despacho olha primeiro se existe vaga e só então procura o pedido
+mais urgente.
 
 Como ler: **nenhum 5xx e nenhum erro de conexão**; cada notificação distinta gerou exatamente um
 pedido; depois de 3 mudanças de trânsito no meio da carga, **todos** os pedidos em aberto batem com
 um recálculo sequencial. Os poucos `409` do redespacho são esperados: o "entregador destino" já
 estava na capacidade máxima quando a requisição chegou — o sistema detectou e recusou, em vez de
-estourar a capacidade. Os **3 698 pedidos aguardando entregador** também são esperados e revelam
+estourar a capacidade. Os **3 693 pedidos aguardando entregador** também são esperados e revelam
 uma característica real do domínio: a frota de 4 entregadores (capacidade total 15) não acompanha
 uma rajada de milhares de pedidos — no mundo real, isso é sinal de que a central precisa escalar a
 frota, exatamente o tipo de decisão operacional que este painel deveria expor.
@@ -121,12 +128,12 @@ Capturas do dashboard (`http://127.0.0.1:8080`) em três momentos, com o relógi
 mostrar os estados de prazo. O painel só lê a API (`/api/v1/metricas`, `/pedidos`, `/entregadores`,
 `/alertas`, `/auditoria`); nada nele altera o estado do núcleo.
 
-**Operação normal** (49 pedidos de uma carga reduzida; 2 atrasados, 5 em risco, 30 no prazo e 12 entregues):
+**Operação normal** (49 pedidos de uma carga reduzida; 2 atrasados, 5 em risco, 28 no prazo e 14 entregues):
 
 ![Visão geral do dashboard](img/dashboard-visao-geral.png)
 
 **Sob a carga completa** (`scripts/carga.py`): 1 000 pedidos na tela (o painel lê no máximo os 1 000
-primeiros por hora limite), 3 697 aguardando entregador e os quatro entregadores no limite de capacidade:
+primeiros por hora limite), 3 694 aguardando entregador e os quatro entregadores no limite de capacidade:
 
 ![Dashboard sob carga](img/dashboard-sob-carga.png)
 

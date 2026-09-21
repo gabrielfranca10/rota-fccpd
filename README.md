@@ -20,7 +20,7 @@ threads ao mesmo tempo.
 Requisito: **Python 3.10+**. Não há dependências externas. (No Windows use `python` no lugar de `python3`.)
 
 ```bash
-python3 -m unittest discover -s tests -t .              # 37 testes
+python3 -m unittest discover -s tests -t .              # 42 testes
 python3 -m rota --relogio-simulado 2026-09-21T11:00      # servidor em http://127.0.0.1:8080
 python3 scripts/carga.py                                 # em outro terminal: carga + auditoria
 ```
@@ -28,7 +28,7 @@ python3 scripts/carga.py                                 # em outro terminal: ca
 Abra `http://127.0.0.1:8080` no navegador para ver o dashboard ao vivo. Consulta rápida via API:
 `curl http://127.0.0.1:8080/api/v1/pedidos?status=EM_RISCO`
 
-A cada push o [CI](.github/workflows/ci.yml) roda os 37 testes (Python 3.10 e 3.13), as duas demos de
+A cada push o [CI](.github/workflows/ci.yml) roda os 42 testes (Python 3.10 e 3.13), as duas demos de
 concorrência e uma carga reduzida que só passa se a auditoria das invariantes voltar `ok`.
 
 ## O dashboard

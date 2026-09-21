@@ -33,7 +33,7 @@ Os pedidos nascem das **notificações** que as plataformas (iFood, Uber Eats, R
 | RF3 Vincular a notificação ao restaurante cadastrado | `_processar` (checagem em `_restaurantes`) |
 | RF4 Calcular a hora limite de entrega (preparo + trajeto, pico, bloqueio, prioridade) | `calcular_hora_limite` |
 | RF5 Despachar automaticamente para o entregador disponível de menor carga, respeitando a capacidade | `_tentar_atribuir` |
-| RF6 Manter fila de espera para pedidos sem entregador disponível e redespachar quando uma vaga libera | `_aguardando`, `_worker_despacho`, `_acordar_fila_espera` |
+| RF6 Manter fila de espera para pedidos sem entregador disponível e, quando uma vaga libera, atribuí-la ao pedido **mais urgente** (menor hora limite) | `_aguardando`, `_worker_despacho`, `_mais_urgente_em_espera`, `_acordar_fila_espera` |
 | RF7 Registrar confirmação de entrega (com ou sem atraso) e redespachar pedidos entre entregadores | `confirmar_entrega`, `redespachar_pedido` |
 | RF8 Declarar janelas de pico/bloqueio no trânsito e recalcular os pedidos afetados | `declarar_janela`, `_recalcular_todos` |
 | RF9 Monitorar pedidos e emitir alertas (EM_RISCO, ATRASADO, RECALCULADO, AGUARDANDO_ENTREGADOR) | `executar_monitor`, `Alertas` |
