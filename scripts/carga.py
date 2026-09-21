@@ -156,7 +156,12 @@ def main():
     print("\nrespostas por (operação, status HTTP):")
     for (op, s), c in sorted(status_contagem.items(), key=lambda x: str(x)):
         print(f"  {op:<14}{str(s):<12}{c}")
-    ruins = {k: v for k, v in status_contagem.items() if not isinstance(k[1], int) or k[1] >= 500 and k[1] != 503}
+    # Só passam as respostas previstas para cada operação. Antes só 5xx reprovava, e um 400 (corpo
+    # inválido do próprio script, por exemplo) passaria despercebido. 409 é esperado em confirmar e
+    # redespachar (disputa legítima); 503 em notificar é o backpressure, que o cliente reenvia.
+    esperados = {"notificar": {200, 202, 503}, "listar": {200}, "declarar_janela": {202},
+                 "confirmar": {200, 409}, "redespachar": {200, 409}}
+    ruins = {k: v for k, v in status_contagem.items() if k[1] not in esperados.get(k[0], set())}
     print("\nauditoria:", json.dumps(audit, ensure_ascii=False))
     ok = audit["ok"] and audit["oraculo_executado"] and not ruins
     print("\nRESULTADO:", "OK — nenhuma falha e todas as invariantes preservadas" if ok else f"FALHA {ruins}")
