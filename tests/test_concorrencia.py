@@ -12,7 +12,8 @@ from tests.apoio import notif, novo_nucleo
 
 
 def disparar(n_threads, alvo):
-    """Solta todas as threads no mesmo instante e devolve exceções não esperadas."""
+    """Solta todas as threads no mesmo instante (com troca de thread agressiva) e devolve as
+    exceções não esperadas."""
     barreira = threading.Barrier(n_threads)
     erros = []
 
@@ -24,11 +25,18 @@ def disparar(n_threads, alvo):
             erros.append(repr(e))
 
     ts = [threading.Thread(target=corpo, args=(i,), daemon=True) for i in range(n_threads)]
-    for t in ts:
-        t.start()
-    limite = time.monotonic() + 20
-    for t in ts:
-        t.join(max(0.0, limite - time.monotonic()))
+    # troca de thread a cada ~1 µs (padrão: 5 ms). Sem isso, sob o GIL, uma thread quase sempre
+    # termina o "verificar-e-agir" antes de outra entrar, e um lock esquecido passa despercebido.
+    intervalo = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        for t in ts:
+            t.start()
+        limite = time.monotonic() + 20
+        for t in ts:
+            t.join(max(0.0, limite - time.monotonic()))
+    finally:
+        sys.setswitchinterval(intervalo)
     presas = sum(t.is_alive() for t in ts)
     if presas:
         erros.append(f"{presas} threads presas após 20 s (provável deadlock)")
@@ -207,7 +215,142 @@ class TestConcorrencia(unittest.TestCase):
         self.assertTrue(a["ok"], a)
 
 
+class SetLento(set):
+    """Agenda de um entregador com `len` lento: alarga de propósito a janela entre "checar a
+    capacidade" e "atribuir", que sob o GIL quase nunca é interrompida por acaso."""
+
+    def __len__(self):
+        tamanho = super().__len__()
+        time.sleep(0.002)        # o tamanho lido já está velho quando quem chamou for usá-lo
+        return tamanho
+
+
+class TestJanelasAlargadas(unittest.TestCase):
+    """Cada teste força DE PROPÓSITO a intercalação ruim (em vez de torcer para ela acontecer) e
+    exige que o núcleo continue correto. São eles que fazem os testes de mutação do doc 04
+    acusarem o lock esquecido: os testes de estresse sozinhos não pegam, pela pouca chance de
+    a troca de thread cair exatamente no meio do verificar-e-agir."""
+
+    def test_capacidade_nao_estoura_com_atribuicoes_simultaneas(self):
+        """R5: 8 pedidos de restaurantes DIFERENTES (locks L2 independentes) disputam 2 vagas."""
+        n = novo_nucleo(restaurantes=8, workers=8, iniciar=False)
+        n._entregadores.clear(); n._lock_entregador.clear(); n._agenda.clear()
+        n.iniciar()
+        try:
+            n.cadastrar_entregador({"entregador_id": "ent-solo", "nome": "Solo", "veiculo": "moto",
+                                    "capacidade": 2})
+            n._agenda["ent-solo"] = SetLento()
+            for i in range(8):
+                n.receber_notificacao(notif(i, restaurante=i, numero_pedido=f"IFOOD-{i:06d}"))
+            self.assertTrue(n.aguardar_ocioso())
+            a = n.auditoria()
+            self.assertTrue(a["ok"], a)
+            self.assertEqual(set.__len__(n._agenda["ent-solo"]), 2)
+            self.assertEqual(n.estatisticas()["pedidos_aguardando_entregador"], 6)
+        finally:
+            n.parar()
+
+    def test_janela_declarada_no_meio_do_calculo_nao_deixa_pedido_com_transito_velho(self):
+        """R3: o cálculo é segurado por 0,3 s enquanto a central declara um pico. A troca de
+        trânsito tem de esperar o cálculo gravar o pedido, para o recálculo enxergá-lo."""
+        import rota.nucleo as modulo
+        n = novo_nucleo()
+        original = modulo.calcular_hora_limite
+        calculando, usado = threading.Event(), []
+
+        def lento(*args, **kwargs):
+            if threading.current_thread().name.startswith("ingestao") and not usado:
+                usado.append(True)
+                calculando.set()
+                time.sleep(0.3)          # a thread fica DENTRO da seção crítica do trânsito
+            return original(*args, **kwargs)
+
+        modulo.calcular_hora_limite = lento
+        try:
+            n.receber_notificacao(notif(0))
+            self.assertTrue(calculando.wait(5))
+            n.declarar_janela({"inicio": "2026-09-21T11:00:00-03:00", "fim": "2026-09-21T12:00:00-03:00",
+                               "tipo": "PICO", "motivo": "teste"})
+            self.assertTrue(n.aguardar_ocioso())
+        finally:
+            modulo.calcular_hora_limite = original
+        try:
+            a = n.auditoria()
+            self.assertTrue(a["ok"], a)
+            self.assertTrue(a["oraculo_executado"])
+            self.assertEqual(n.listar_pedidos()[0]["transito_versao"], 2)
+        finally:
+            n.parar()
+
+    def test_confirmar_nao_intercala_com_redespacho(self):
+        """R8: a confirmação é congelada entre "conferir o responsável" e "liberar a vaga". O
+        redespacho do mesmo pedido tem de esperar e encontrar o pedido já entregue (409)."""
+        n = novo_nucleo()
+        try:
+            v, _ = n.receber_notificacao(notif(0))
+            self.assertTrue(n.aguardar_ocioso())
+            pid = n.obter_notificacao(v["notificacao_id"])["pedido_id"]
+            responsavel = n.obter_pedido(pid)["entregador_responsavel_id"]
+            destino = next(e for e in ("ent-joao", "ent-marcia", "ent-caio", "ent-duda") if e != responsavel)
+
+            dentro, liberar = threading.Event(), threading.Event()
+            agora_original = n.relogio.agora
+
+            def agora_lento():
+                if threading.current_thread().name == "confirmador" and not dentro.is_set():
+                    dentro.set()
+                    liberar.wait(5)      # congela a confirmação já dentro da seção crítica
+                return agora_original()
+
+            n.relogio.agora = agora_lento
+            resultado = []
+            t = threading.Thread(name="confirmador", target=lambda: resultado.append(
+                n.confirmar_entrega(pid, {"entregador_id": responsavel, "codigo_confirmacao": "C"})))
+            t.start()
+            self.assertTrue(dentro.wait(5))
+            descongelar = threading.Timer(0.3, liberar.set)
+            descongelar.start()
+            with self.assertRaises(Conflito):
+                n.redespachar_pedido(pid, {"entregador_destino": destino})
+            t.join(5)
+            descongelar.join()
+            del n.relogio.agora
+            self.assertEqual(resultado[0]["status"], "ENTREGUE")
+            a = n.auditoria()
+            self.assertTrue(a["ok"], a)
+        finally:
+            n.parar()
+
+
 class TestRWLock(unittest.TestCase):
+    def test_escritor_nao_passa_fome_com_leitores_sobrepostos(self):
+        """R4: 4 leitores escalonados mantêm SEMPRE algum leitor ativo. Sem preferência para o
+        escritor ele nunca entraria; com preferência, novos leitores esperam e ele passa."""
+        rw, parar = RWLock(), threading.Event()
+
+        def leitor(atraso):
+            time.sleep(atraso)
+            while not parar.is_set():
+                with rw.leitura():
+                    time.sleep(0.02)
+
+        leitores = [threading.Thread(target=leitor, args=(i * 0.005,), daemon=True) for i in range(4)]
+        for t in leitores:
+            t.start()
+        time.sleep(0.05)                                   # agora sempre há leitores ativos
+        entrou = threading.Event()
+
+        def escritor():
+            with rw.escrita():
+                entrou.set()
+
+        threading.Thread(target=escritor, daemon=True).start()
+        conseguiu = entrou.wait(2.0)
+        parar.set()
+        for t in leitores:
+            t.join(2)
+        self.assertTrue(conseguiu, "o escritor ficou esperando para sempre (starvation)")
+
     def test_escritor_exclusivo_e_leitores_simultaneos(self):
         rw, estado = RWLock(), {"leitores": 0, "max_leitores": 0, "violacao": False}
         lk = threading.Lock()

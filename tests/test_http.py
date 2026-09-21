@@ -3,12 +3,18 @@ import http.client
 import json
 import threading
 import unittest
+from datetime import timedelta
 
 from rota.http_api import ServidorComPool
+from rota.nucleo import Nucleo
+from rota.relogio import Relogio
 from tests.apoio import notif, novo_nucleo
 
 
-class TestHttp(unittest.TestCase):
+class _ComServidor(unittest.TestCase):
+    """Sobe um servidor de verdade por classe. Cada classe tem o SEU núcleo: um teste que mexe no
+    relógio simulado não pode alterar o que os outros testes enxergam."""
+
     @classmethod
     def setUpClass(cls):
         cls.nucleo = novo_nucleo()
@@ -38,6 +44,8 @@ class TestHttp(unittest.TestCase):
             return r.status, json.loads(bruto.decode()), r
         return r.status, bruto.decode(errors="replace"), r
 
+
+class TestHttp(_ComServidor):
     def criar_pedido(self, i, descricao=None):
         s, p, _ = self.req("POST", "/api/v1/notificacoes", notif(i, descricao=descricao))
         self.assertEqual(s, 202)
@@ -101,12 +109,6 @@ class TestHttp(unittest.TestCase):
         s, e, _ = self.req("POST", f"/api/v1/pedidos/{pid}/redespacho", {"entregador_destino": "ent-duda"})
         self.assertEqual((s, e["erro"]["codigo"]), (409, "CONFLITO"))
 
-    def test_relogio_simulado(self):
-        s, r, _ = self.req("POST", "/api/v1/admin/relogio", {"minutos": 0})
-        self.assertEqual(s, 400)
-        s, r, _ = self.req("POST", "/api/v1/admin/relogio", {"minutos": 5})
-        self.assertEqual(s, 200)
-
     def test_dashboard_estatico(self):
         s, _, r = self.req("GET", "/")
         self.assertEqual(s, 200)
@@ -141,6 +143,32 @@ class TestHttp(unittest.TestCase):
         self.assertTrue(self.nucleo.aguardar_ocioso())
         pedidos = [p for p in self.nucleo.listar_pedidos(limite=1000) if p["numero_pedido"] == "IFOOD-000003"]
         self.assertEqual(len(pedidos), 1)
+
+
+class TestHttpRelogio(_ComServidor):
+    def test_relogio_simulado(self):
+        s, r, _ = self.req("POST", "/api/v1/admin/relogio", {"minutos": 0})
+        self.assertEqual(s, 400)
+        antes = self.nucleo.relogio.agora()
+        s, r, _ = self.req("POST", "/api/v1/admin/relogio", {"minutos": 5})
+        self.assertEqual(s, 200)
+        self.assertEqual(r["agora"], (antes + timedelta(minutes=5)).isoformat(timespec="seconds"))
+
+    def test_relogio_real_recusa_avancar(self):
+        real = Nucleo(Relogio())
+        srv = ServidorComPool(("127.0.0.1", 0), real, workers=2)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            c = http.client.HTTPConnection("127.0.0.1", srv.server_port, timeout=5)
+            c.request("POST", "/api/v1/admin/relogio", body=json.dumps({"minutos": 5}),
+                      headers={"Content-Type": "application/json"})
+            r = c.getresponse()
+            corpo = json.loads(r.read())
+            c.close()
+            self.assertEqual((r.status, corpo["erro"]["codigo"]), (409, "RELOGIO_REAL"))
+        finally:
+            srv.shutdown()
+            srv.server_close()
 
 
 if __name__ == "__main__":

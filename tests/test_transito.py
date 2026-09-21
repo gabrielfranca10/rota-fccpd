@@ -60,6 +60,32 @@ class TestTransito(unittest.TestCase):
         with self.assertRaises(ValueError):
             calcular_hora_limite(Transito(), T0, 20, 51.0)
 
+    def test_pico_cobrindo_todo_o_trajeto_dobra_o_tempo(self):
+        # 6 km a 18 km/h = 20 min; em pico a velocidade cai à metade, então o trajeto leva 40 min
+        pico = Janela(T0, T0 + timedelta(hours=3), PICO, "hora do almoço")
+        r = calcular_hora_limite(Transito().com_janela(pico), T0, 20, 6.0)
+        self.assertEqual(r.hora_saida, T0 + timedelta(minutes=20))
+        self.assertEqual(r.hora_limite, r.hora_saida + timedelta(minutes=40))
+        self.assertEqual(len(r.janelas_consideradas), 1)
+        self.assertEqual(r.janelas_consideradas[0], (r.hora_saida, r.hora_limite, "trânsito intenso"))
+
+    def test_bloqueio_no_meio_do_trajeto_para_o_avanco(self):
+        # sai às 12:20; roda 5 min; bloqueio de 12:25 a 12:34 (inclusive) para o avanço até 12:35;
+        # faltam 15 min de trajeto, então chega às 12:50
+        bloqueio = Janela(T0 + timedelta(minutes=25), T0 + timedelta(minutes=34), BLOQUEIO, "acidente")
+        r = calcular_hora_limite(Transito().com_janela(bloqueio), T0, 20, 6.0)
+        self.assertEqual(r.hora_saida, T0 + timedelta(minutes=20))
+        self.assertEqual(r.hora_limite, T0 + timedelta(minutes=50))
+        self.assertEqual(r.janelas_consideradas,
+                         ((T0 + timedelta(minutes=25), T0 + timedelta(minutes=35), "via bloqueada: acidente"),))
+
+    def test_janela_inclui_as_duas_pontas(self):
+        j = Janela(T0, T0 + timedelta(minutes=10), PICO, "x")
+        self.assertTrue(j.cobre(T0))
+        self.assertTrue(j.cobre(T0 + timedelta(minutes=10)))
+        self.assertFalse(j.cobre(T0 - timedelta(seconds=1)))
+        self.assertFalse(j.cobre(T0 + timedelta(minutes=10, seconds=1)))
+
     def test_minutos_restantes(self):
         limite = T0 + timedelta(minutes=30)
         self.assertEqual(minutos_restantes(Transito(), T0, limite), 30)
