@@ -737,6 +737,9 @@ td.vazio, li.vazio {
 }
 
 @media (max-width: 520px) {
+  /* na tela estreita o restaurante sai da tabela para o status caber sem rolar de lado */
+  #tabela-pedidos th:nth-child(2),
+  #tabela-pedidos td:nth-child(2) { display: none; }
   .painel { padding: 16px; }
   .kpi { padding: 14px; }
   .kpi-valor { font-size: 26px; }
