@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# O workflow só lê o repositório: nenhum passo escreve commit, release ou comentário.
+permissions:
+  contents: read
+
+# Push em cima de push cancela a execução antiga: o que importa é o último commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 é o mínimo declarado no README; 3.13 é a versão usada no desenvolvimento.
+        python: ["3.10", "3.13"]
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # Sem dependências externas: só a biblioteca padrão. Inclui os testes de
+      # estresse com Barrier, que forçam as threads a colidirem.
+      - name: Testes (unidade, concorrência e HTTP)
+        run: python -m unittest discover -s tests -t . -v
+
+  demos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: testes
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # As duas demos rodam sem servidor e provam o contraste: sem sincronização
+      # a corrida aparece; com os locks do rota, não.
+      - name: Demo da corrida de deduplicação
+        run: python scripts/demo_corrida.py
+
+      - name: Demo do deadlock no redespacho cruzado
+        run: python scripts/demo_deadlock.py
+
+      # Sobe o servidor de verdade, roda uma carga reduzida e falha se a
+      # auditoria (invariantes + oráculo sequencial) acusar qualquer violação.
+      - name: Carga reduzida com auditoria
+        run: |
+          python -m rota --porta 8090 --relogio-simulado 2026-09-21T11:00 &
+          SERVIDOR=$!
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:8090/health >/dev/null && break
+            sleep 1
+          done
+          python scripts/carga.py --porta 8090 --clientes 10 --por-cliente 20 --distintas 100
+          STATUS=$?
+          kill $SERVIDOR
+          exit $STATUS
