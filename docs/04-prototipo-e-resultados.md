@@ -115,7 +115,26 @@ uma característica real do domínio: a frota de 4 entregadores (capacidade tota
 uma rajada de milhares de pedidos — no mundo real, isso é sinal de que a central precisa escalar a
 frota, exatamente o tipo de decisão operacional que este painel deveria expor.
 
-## 4.3 Limitações conhecidas (e em que entrega serão tratadas)
+## 4.3 Dashboard ao vivo (capturas)
+
+Capturas do dashboard (`http://127.0.0.1:8080`) em três momentos, com o relógio simulado avançado para
+mostrar os estados de prazo. O painel só lê a API (`/api/v1/metricas`, `/pedidos`, `/entregadores`,
+`/alertas`, `/auditoria`); nada nele altera o estado do núcleo.
+
+**Operação normal** (49 pedidos de uma carga reduzida; 2 atrasados, 5 em risco, 30 no prazo e 12 entregues):
+
+![Visão geral do dashboard](img/dashboard-visao-geral.png)
+
+**Sob a carga completa** (`scripts/carga.py`): 1 000 pedidos na tela (o painel lê no máximo os 1 000
+primeiros por hora limite), 3 697 aguardando entregador e os quatro entregadores no limite de capacidade:
+
+![Dashboard sob carga](img/dashboard-sob-carga.png)
+
+**Tela estreita:**
+
+<img src="img/dashboard-celular.png" alt="Dashboard em tela estreita" width="320">
+
+## 4.4 Limitações conhecidas (e em que entrega serão tratadas)
 
 | Limitação | Por quê é aceitável agora | Plano |
 |---|---|---|

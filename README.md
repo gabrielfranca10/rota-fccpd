@@ -1,5 +1,7 @@
 # rota — Núcleo de Despacho de Pedidos (Entrega 1)
 
+[![CI](https://github.com/gabrielfranca10/rota-fccpd/actions/workflows/ci.yml/badge.svg)](https://github.com/gabrielfranca10/rota-fccpd/actions/workflows/ci.yml)
+
 **Disciplina:** CCA — Fundamentos de Computação Concorrente, Paralela e Distribuída — CESAR School, 2026.2
 **Professor:** Jorge Soares de Farias Júnior
 **Equipe:** Gabriel França · Caio Leimig · Fernando Soares · Ramsés Cordeiro
@@ -25,6 +27,26 @@ python3 scripts/carga.py                                 # em outro terminal: ca
 
 Abra `http://127.0.0.1:8080` no navegador para ver o dashboard ao vivo. Consulta rápida via API:
 `curl http://127.0.0.1:8080/api/v1/pedidos?status=EM_RISCO`
+
+A cada push o [CI](.github/workflows/ci.yml) roda os 37 testes (Python 3.10 e 3.13), as duas demos de
+concorrência e uma carga reduzida que só passa se a auditoria das invariantes voltar `ok`.
+
+## O dashboard
+
+Painel somente leitura sobre a API, atualizado a cada 4 s: pedidos por situação, os próximos limites de
+entrega, ocupação de cada entregador, avisos do sistema e a auditoria das invariantes sob demanda.
+
+![Visão geral do dashboard](docs/img/dashboard-visao-geral.png)
+
+Durante a rajada de 5 000 notificações do `scripts/carga.py` (4 entregadores, capacidade total 15), quase
+todos os pedidos ficam aguardando entregador e os entregadores aparecem no limite. É o comportamento
+esperado sob escassez de frota, não uma falha (ver doc 04).
+
+![Dashboard sob carga](docs/img/dashboard-sob-carga.png)
+
+Em tela estreita o menu lateral some e as colunas se reorganizam:
+
+<img src="docs/img/dashboard-celular.png" alt="Dashboard em tela estreita" width="320">
 
 ## Documentação (mapeada à rubrica)
 
