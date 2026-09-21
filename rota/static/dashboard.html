@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Rota — Despacho de Pedidos</title>
+<link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+
+<!-- ícones (traço) reutilizados com <use href="#i-...">, sem biblioteca externa -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-visao" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+    <symbol id="i-pedidos" viewBox="0 0 24 24"><rect x="5.5" y="3.5" width="13" height="17.5" rx="2"/><path d="M9 3.5V6h6V3.5M9 11h6M9 15h6"/></symbol>
+    <symbol id="i-entregadores" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.2" cy="9" r="2.5"/><path d="M17.2 14.2c2.4 0 3.8 1.7 3.8 4.3"/></symbol>
+    <symbol id="i-alertas" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/></symbol>
+    <symbol id="i-auditoria" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-atrasado" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.4v.1"/></symbol>
+    <symbol id="i-risco" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-prazo" viewBox="0 0 24 24"><circle cx="5" cy="19" r="2.2"/><circle cx="19" cy="5" r="2.2"/><path d="M7 19h6.5a3.5 3.5 0 0 0 0-7h-3a3.5 3.5 0 0 1 0-7H17"/></symbol>
+    <symbol id="i-entregue" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></symbol>
+    <symbol id="i-pacote" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+
+  <aside class="sidebar" aria-label="navegação">
+    <div class="marca">
+      <span class="marca-logo">
+        <svg class="icone" viewBox="0 0 24 24" width="22" height="22"><use href="#i-prazo"/></svg>
+      </span>
+      <span class="marca-texto">
+        <span class="marca-nome">Rota</span>
+        <span class="marca-sub">Despacho de pedidos</span>
+      </span>
+    </div>
+
+    <p class="nav-titulo">Central</p>
+    <nav class="nav" id="nav">
+      <a class="nav-item ativo" href="#visao"><svg class="icone" viewBox="0 0 24 24"><use href="#i-visao"/></svg>Visão geral</a>
+      <a class="nav-item" href="#pedidos"><svg class="icone" viewBox="0 0 24 24"><use href="#i-pedidos"/></svg>Pedidos</a>
+      <a class="nav-item" href="#entregadores"><svg class="icone" viewBox="0 0 24 24"><use href="#i-entregadores"/></svg>Entregadores</a>
+      <a class="nav-item" href="#alertas"><svg class="icone" viewBox="0 0 24 24"><use href="#i-alertas"/></svg>Alertas</a>
+      <a class="nav-item" href="#auditoria"><svg class="icone" viewBox="0 0 24 24"><use href="#i-auditoria"/></svg>Auditoria</a>
+    </nav>
+  </aside>
+
+  <div class="principal">
+    <header class="topbar">
+      <div class="topbar-titulo">
+        <svg class="icone" viewBox="0 0 24 24"><use href="#i-visao"/></svg>
+        <span>Central de despacho</span>
+      </div>
+      <div class="marca-mobile">
+        <span class="marca-logo"><svg class="icone" viewBox="0 0 24 24" width="18" height="18"><use href="#i-prazo"/></svg></span>
+        <span class="marca-nome">Rota</span>
+      </div>
+      <div class="status" id="status">
+        <span class="ponto" id="status-ponto"></span>
+        <span id="status-texto">conectando…</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="titulo-linha" id="visao">
+        <h1>Visão geral</h1>
+        <div class="relogio" id="relogio">—</div>
+      </div>
+
+      <section class="kpis" id="kpis" aria-label="pedidos por situação"></section>
+
+      <section class="duas">
+        <div class="painel">
+          <div class="painel-cabeca">
+            <h2>Próximos limites de entrega</h2>
+            <span class="contador" id="contador-urgentes">0</span>
+          </div>
+          <ul class="lista-urgentes" id="lista-urgentes">
+            <li class="vazio">Nenhum pedido em aberto.</li>
+          </ul>
+        </div>
+
+        <div class="painel">
+          <div class="painel-cabeca"><h2>Situação da operação</h2></div>
+          <div class="donut-caixa" id="donut"></div>
+          <ul class="situacao" id="situacao"></ul>
+        </div>
+      </section>
+
+      <section class="duas duas-fim">
+        <div class="painel painel-pedidos" id="pedidos">
+          <div class="painel-cabeca">
+            <h2>Todos os pedidos</h2>
+            <div class="abas" id="abas" role="tablist">
+              <button class="aba ativa" data-status="" role="tab">Todos <span class="aba-n" data-n="">0</span></button>
+              <button class="aba" data-status="ATRASADO" role="tab">Atrasados <span class="aba-n" data-n="ATRASADO">0</span></button>
+              <button class="aba" data-status="EM_RISCO" role="tab">Em risco <span class="aba-n" data-n="EM_RISCO">0</span></button>
+              <button class="aba" data-status="NO_PRAZO" role="tab">No prazo <span class="aba-n" data-n="NO_PRAZO">0</span></button>
+              <button class="aba" data-status="ENTREGUE" role="tab">Entregues <span class="aba-n" data-n="ENTREGUE">0</span></button>
+            </div>
+          </div>
+          <div class="tabela-scroll">
+            <table id="tabela-pedidos">
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th>Restaurante</th>
+                  <th>Entregador</th>
+                  <th class="num">Limite</th>
+                  <th class="num">Restam</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="rodape-tabela" id="rodape-tabela"></p>
+        </div>
+
+        <div class="lateral">
+          <div class="painel" id="entregadores">
+            <div class="painel-cabeca"><h2>Entregadores</h2></div>
+            <ul class="lista-entregadores" id="lista-entregadores"></ul>
+          </div>
+
+          <div class="painel" id="alertas">
+            <div class="painel-cabeca"><h2>Avisos do sistema</h2></div>
+            <ul class="lista-alertas" id="lista-alertas">
+              <li class="vazio">Nenhum aviso ainda.</li>
+            </ul>
+          </div>
+
+          <div class="painel" id="auditoria">
+            <div class="painel-cabeca">
+              <h2>Auditoria</h2>
+              <button id="btn-auditoria" class="botao">Rodar auditoria</button>
+            </div>
+            <div id="resultado-auditoria" class="auditoria">Confira as invariantes do sistema com um clique.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="/static/dashboard.js"></script>
+</body>
+</html>
