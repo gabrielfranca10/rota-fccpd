@@ -101,6 +101,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._despachar("POST")
 
+    # métodos que a API não usa: passam pelo mesmo caminho para receber o 404/405 em JSON
+    # (sem isto a biblioteca padrão responderia 501 com uma página HTML)
+    def do_PUT(self):
+        self._despachar("PUT")
+
+    def do_PATCH(self):
+        self._despachar("PATCH")
+
+    def do_DELETE(self):
+        self._despachar("DELETE")
+
+    def do_OPTIONS(self):
+        self._despachar("OPTIONS")
+
     # ------------------------------------------------------------------
     def _despachar(self, metodo: str) -> None:
         t0 = time.perf_counter()
@@ -118,6 +132,7 @@ class Handler(BaseHTTPRequestHandler):
                         status, corpo = fn(self, nucleo, *achou.groups())
                         break
             else:
+                self._descartar_corpo_pendente()   # não vamos ler o corpo: evita RST no cliente
                 if metodos_do_caminho:
                     raise ErroHttp(405, "METODO_NAO_PERMITIDO", "método não permitido",
                                    {"permitidos": metodos_do_caminho})
@@ -184,6 +199,11 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(dados, dict):
             raise ErroValidacao("o corpo deve ser um objeto JSON")
         return dados
+
+    def _descartar_corpo_pendente(self) -> None:
+        tam = self.headers.get("Content-Length", "")
+        if tam.isdigit():
+            self._descartar_corpo(int(tam))
 
     def _descartar_corpo(self, n: int) -> None:
         # Lê e joga fora o corpo que o cliente já está enviando antes de fechar a conexão:

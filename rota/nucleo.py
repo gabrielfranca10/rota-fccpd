@@ -36,13 +36,14 @@ from .dominio import (ATRASADO, EM_RISCO, ENTREGUE, ERRO, NAO_VINCULADA, NO_PRAZ
                       PLATAFORMAS, PRIORIDADES, PROCESSADA, SEM_PEDIDO, Conflito,
                       ErroValidacao, Entregador, NaoEncontrado, Notificacao, Pedido, Restaurante,
                       Sobrecarga, id_valido, numero_pedido_valido)
-from .relogio import Relogio
+from .relogio import BRT, Relogio
 from .rwlock import RWLock
 from .transito import Transito, Janela, TIPOS_JANELA, calcular_hora_limite
 
 log = logging.getLogger("rota.nucleo")
 
 _PILULA = None  # "pílula de veneno": sinaliza fim para os workers
+_SINAL_DESPACHO = "despachar"  # "há vaga? atribua ao pedido mais urgente": o conteúdo não importa
 _RE_PREPARO = re.compile(r"preparo\w*\s*(?:de|em|:)?\s*(\d{1,3})\s*min", re.I)
 
 
@@ -66,15 +67,19 @@ class Metricas:
 class Alertas:
     """Buffer circular de alertas com cursor (seq). Clientes fazem polling com ?apos=<seq>."""
 
-    def __init__(self, capacidade: int = 5000) -> None:
+    def __init__(self, capacidade: int = 5000, relogio: Relogio | None = None) -> None:
         self._lock = threading.Lock()
         self._buf: deque = deque(maxlen=capacidade)
         self._seq = 0
+        self._relogio = relogio or Relogio()
 
     def publicar(self, tipo: str, **dados) -> None:
+        # o carimbo vem do relógio do sistema (o simulado, nas demos) e é lido ANTES do lock:
+        # Alertas e Relogio são folhas e nenhuma folha segura o seu lock ao pedir outro
+        em = self._relogio.agora().isoformat(timespec="seconds")
         with self._lock:
             self._seq += 1
-            self._buf.append({"seq": self._seq, "tipo": tipo, "em": time.strftime("%Y-%m-%dT%H:%M:%S"), **dados})
+            self._buf.append({"seq": self._seq, "tipo": tipo, "em": em, **dados})
 
     def listar(self, apos: int = 0, limite: int = 100) -> dict:
         with self._lock:
@@ -91,14 +96,14 @@ def _iso(d) -> str | None:
 def _parse_datetime(valor, campo: str) -> datetime:
     if not isinstance(valor, str):
         raise ErroValidacao(f"'{campo}' deve ser uma data/hora ISO 8601", {"campo": campo})
+    # o Python 3.10 não entende o sufixo 'Z' (UTC), muito comum em webhooks; do 3.11 em diante entende
+    texto = valor[:-1] + "+00:00" if valor.endswith(("Z", "z")) else valor
     try:
-        dt = datetime.fromisoformat(valor)
+        dt = datetime.fromisoformat(texto)
     except ValueError:
         raise ErroValidacao(f"'{campo}' deve ser uma data/hora ISO 8601", {"campo": campo}) from None
-    if dt.tzinfo is None:
-        from .relogio import BRT
-        dt = dt.replace(tzinfo=BRT)
-    return dt
+    # sem fuso = horário de Brasília; com fuso, converte: o mesmo instante vira a mesma impressão digital
+    return dt.replace(tzinfo=BRT) if dt.tzinfo is None else dt.astimezone(BRT)
 
 
 def _texto(dados: dict, campo: str, obrigatorio=True, maximo=200, padrao=None) -> str | None:
@@ -141,7 +146,7 @@ class Nucleo:
         self.relogio = relogio or Relogio()
         self.janela_risco_min = janela_risco_min
         self.metricas = Metricas()
-        self.alertas = Alertas()
+        self.alertas = Alertas(relogio=self.relogio)
 
         self._transito_rw = RWLock()                        # L1
         self._transito = Transito()
@@ -188,12 +193,16 @@ class Nucleo:
             if not self._aceitando and not self._threads:
                 return
             self._aceitando = False
+        limite = time.monotonic() + timeout
+        self._parar.set()              # o monitor não precisa mais rodar
         for _ in range(self._n_workers):
             self._fila.put(_PILULA)    # FIFO: as pílulas ficam atrás de todo o trabalho já aceito
+        # 1º a ingestão: enquanto ela roda, ainda gera trabalho para o despacho. Só depois de ela
+        # terminar o despacho e o recálculo recebem a pílula, e assim drenam tudo o que chegou.
+        for t in [t for t in self._threads if t.name.startswith("ingestao-")]:
+            t.join(max(0.0, limite - time.monotonic()))
         self._fila_recalculo.put(_PILULA)
         self._fila_despacho.put(_PILULA)
-        self._parar.set()
-        limite = time.monotonic() + timeout
         for t in self._threads:
             t.join(max(0.0, limite - time.monotonic()))
         self._threads.clear()
@@ -357,7 +366,7 @@ class Nucleo:
                 nivel = pedido.nivel_alerta
         self.metricas.inc("pedidos_criados")
         if entregador_id is None:
-            self._fila_despacho.put_nowait(pedido.pedido_id)
+            self._fila_despacho.put_nowait(_SINAL_DESPACHO)
             self.alertas.publicar("PEDIDO_AGUARDANDO_ENTREGADOR", pedido_id=pedido.pedido_id,
                                   restaurante_id=rest.restaurante_id)
         if nivel in (EM_RISCO, ATRASADO):
@@ -387,33 +396,55 @@ class Nucleo:
 
     def _worker_despacho(self) -> None:
         while True:
-            pedido_id = self._fila_despacho.get()
+            item = self._fila_despacho.get()
             try:
-                if pedido_id is _PILULA:
+                if item is _PILULA:
                     return
-                self._tentar_despachar(pedido_id)
+                self._tentar_despachar()
             except Exception:
-                log.exception("falha no despacho de %s", pedido_id)
+                log.exception("falha no despacho")
             finally:
                 self._fila_despacho.task_done()
 
-    def _tentar_despachar(self, pedido_id: str) -> None:
+    def _ha_vaga(self) -> bool:
+        """Olhada otimista (sem L3): só decide se vale a pena procurar um pedido em espera.
+        A decisão real continua sendo tomada sob o lock do entregador, em _tentar_atribuir."""
         with self._indice_lock:
-            pedido = self._pedidos.get(pedido_id)
-            rlock = self._lock_restaurante.get(pedido.restaurante_id) if pedido else None
-        if pedido is None or rlock is None:
-            return
-        with rlock:                                              # L2
-            if pedido.entregue_em is not None or pedido.entregador_responsavel_id is not None:
-                with self._indice_lock:
-                    self._aguardando.discard(pedido_id)
+            entregadores = list(self._entregadores.values())
+        return any(len(self._agenda[e.entregador_id]) < e.capacidade for e in entregadores)
+
+    def _mais_urgente_em_espera(self) -> Pedido | None:
+        """Chamada com o L4 em mãos. Menor hora limite primeiro (desempate pelo id): a vaga que
+        libera vai para quem tem menos tempo, e não para quem foi enfileirado antes. A hora limite
+        é lida sem o L2 do restaurante: um recálculo concorrente pode deixar o ranking levemente
+        defasado, mas quem decide de fato é _tentar_atribuir."""
+        if not self._aguardando:
+            return None
+        pid = min(self._aguardando, key=lambda i: (self._pedidos[i].hora_limite_entrega, i))
+        return self._pedidos[pid]
+
+    def _tentar_despachar(self) -> None:
+        """A fila de despacho só carrega um sinal ('pode ter vaga'). Enquanto houver vaga, atribui
+        ao pedido em espera mais urgente; um único sinal preenche todas as vagas abertas."""
+        while self._ha_vaga():
+            with self._indice_lock:
+                pedido = self._mais_urgente_em_espera()
+                rlock = self._lock_restaurante[pedido.restaurante_id] if pedido else None
+            if pedido is None:
                 return
-            entregador_id = self._tentar_atribuir(pedido)
-            if entregador_id is not None:
+            with rlock:                                          # L2
+                if pedido.entregue_em is not None or pedido.entregador_responsavel_id is not None:
+                    with self._indice_lock:                      # já resolvido por outro caminho
+                        self._aguardando.discard(pedido.pedido_id)
+                    continue
+                entregador_id = self._tentar_atribuir(pedido)
+                if entregador_id is None:                        # a vaga sumiu entre a olhada e o lock
+                    return
                 with self._indice_lock:
-                    self._aguardando.discard(pedido_id)
+                    self._aguardando.discard(pedido.pedido_id)
                 self.metricas.inc("pedidos_despachados_apos_espera")
-                self.alertas.publicar("PEDIDO_DESPACHADO", pedido_id=pedido_id, entregador_id=entregador_id)
+                self.alertas.publicar("PEDIDO_DESPACHADO", pedido_id=pedido.pedido_id,
+                                      entregador_id=entregador_id)
 
     # ------------------------------------------------------------------ operações sobre pedidos
     def _localizar(self, pedido_id: str):
@@ -449,12 +480,12 @@ class Nucleo:
         self._acordar_fila_espera()
         return view
 
-    def _acordar_fila_espera(self, limite: int = 3) -> None:
-        """Uma vaga liberou: tenta redespachar alguns pedidos que estavam aguardando."""
+    def _acordar_fila_espera(self) -> None:
+        """Uma vaga liberou (ou o monitor conferiu): se há pedido esperando, acorda o despacho."""
         with self._indice_lock:
-            candidatos = list(self._aguardando)[:limite]
-        for pid in candidatos:
-            self._fila_despacho.put_nowait(pid)
+            ha_espera = bool(self._aguardando)
+        if ha_espera:
+            self._fila_despacho.put_nowait(_SINAL_DESPACHO)
 
     def redespachar_pedido(self, pedido_id: str, dados: dict) -> dict:
         """Move o pedido da agenda de um entregador para a de outro (ex.: pane na moto).
@@ -606,7 +637,7 @@ class Nucleo:
                                               hora_limite_entrega=_iso(p.hora_limite_entrega))
         if emitidos:
             self.metricas.inc("alertas_de_pedido", emitidos)
-        self._acordar_fila_espera(limite=10)
+        self._acordar_fila_espera()
         return emitidos
 
     # ------------------------------------------------------------------ consultas (cópias!)

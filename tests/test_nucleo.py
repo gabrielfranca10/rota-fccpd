@@ -178,6 +178,88 @@ class TestNucleo(unittest.TestCase):
         with self.assertRaises(Sobrecarga):
             self.n.receber_notificacao(notif(0, descricao="depois. Tempo estimado de preparo: 10 minutos."))
 
+    # ------------------------------------------------------------------ fila de espera e desligamento
+    def _nucleo_com_um_entregador(self, capacidade):
+        n = novo_nucleo(restaurantes=1, iniciar=False)
+        n._entregadores.clear(); n._lock_entregador.clear(); n._agenda.clear()  # começa sem entregadores
+        n.iniciar()
+        n.cadastrar_entregador({"entregador_id": "ent-solo", "nome": "Solo", "veiculo": "moto",
+                                "capacidade": capacidade})
+        return n
+
+    def test_vaga_liberada_vai_para_o_pedido_mais_urgente(self):
+        """A fila de espera é ordenada pela hora limite: a vaga não vai para um pedido qualquer."""
+        n = self._nucleo_com_um_entregador(capacidade=1)
+        n.receber_notificacao(notif(0, preparo=15))                    # ocupa a única vaga
+        self.assertTrue(n.aguardar_ocioso())
+        for i in range(1, 31):
+            preparo = 5 + (i * 7) % 60                                 # prazos bem diferentes
+            n.receber_notificacao(notif(i, preparo=preparo,
+                                        descricao=f"e{i}. Tempo estimado de preparo: {preparo} minutos."))
+        self.assertTrue(n.aguardar_ocioso())
+        pedidos = n.listar_pedidos(limite=1000)
+        ocupante = next(p for p in pedidos if p["entregador_responsavel_id"] == "ent-solo")
+        esperando = [p for p in pedidos if p["entregador_responsavel_id"] is None]
+        mais_urgente = min(esperando, key=lambda p: (p["hora_limite_entrega"], p["pedido_id"]))
+        self.assertEqual(len(esperando), 30)
+
+        n.confirmar_entrega(ocupante["pedido_id"], {"entregador_id": "ent-solo", "codigo_confirmacao": "C"})
+        self.assertTrue(n.aguardar_ocioso())
+        com_vaga = [p for p in n.listar_pedidos(limite=1000)
+                    if p["entregador_responsavel_id"] == "ent-solo" and p["status"] != ENTREGUE]
+        self.assertEqual([p["pedido_id"] for p in com_vaga], [mais_urgente["pedido_id"]])
+        self.assertTrue(n.auditoria()["ok"])
+        n.parar()
+
+    def test_varias_vagas_vao_para_os_mais_urgentes_em_ordem(self):
+        n = self._nucleo_com_um_entregador(capacidade=2)
+        for i in (0, 1):
+            n.receber_notificacao(notif(i, preparo=15))
+        self.assertTrue(n.aguardar_ocioso())
+        for i in range(2, 22):
+            preparo = 5 + (i * 11) % 55
+            n.receber_notificacao(notif(i, preparo=preparo,
+                                        descricao=f"e{i}. Tempo estimado de preparo: {preparo} minutos."))
+        self.assertTrue(n.aguardar_ocioso())
+        pedidos = n.listar_pedidos(limite=1000)
+        ocupantes = [p for p in pedidos if p["entregador_responsavel_id"] == "ent-solo"]
+        esperando = sorted((p for p in pedidos if p["entregador_responsavel_id"] is None),
+                           key=lambda p: (p["hora_limite_entrega"], p["pedido_id"]))
+        for p in ocupantes:
+            n.confirmar_entrega(p["pedido_id"], {"entregador_id": "ent-solo", "codigo_confirmacao": "C"})
+        self.assertTrue(n.aguardar_ocioso())
+        novos = {p["pedido_id"] for p in n.listar_pedidos(limite=1000)
+                 if p["entregador_responsavel_id"] == "ent-solo" and p["status"] != ENTREGUE}
+        self.assertEqual(novos, {esperando[0]["pedido_id"], esperando[1]["pedido_id"]})
+        n.parar()
+
+    def test_desligamento_drena_tambem_o_despacho(self):
+        """Todo trabalho aceito é processado, inclusive o que a ingestão ainda gera para o despacho."""
+        n = novo_nucleo(workers=4, fila=5000, restaurantes=5)
+        for i in range(1000):
+            n.receber_notificacao(notif(i, restaurante=i % 5, numero_pedido=f"IFOOD-{i:06d}",
+                                        descricao=f"x{i}. Tempo estimado de preparo: 20 minutos."))
+        n.parar()
+        self.assertTrue(n.ocioso(), "filas de ingestão, recálculo e despacho deveriam estar vazias")
+
+    # ------------------------------------------------------------------ instantes e alertas
+    def test_instante_com_z_ou_outro_fuso_e_o_mesmo_evento(self):
+        """11:00 em Brasília = 14:00Z: o retry do webhook em UTC é a mesma notificação."""
+        a, nova_a = self.n.receber_notificacao(notif(5, hora="2026-09-21T11:00:00-03:00"))
+        b, nova_b = self.n.receber_notificacao(notif(5, hora="2026-09-21T14:00:00Z"))
+        c, nova_c = self.n.receber_notificacao(notif(5, hora="2026-09-21T14:00:00+00:00"))
+        self.assertTrue(nova_a)
+        self.assertFalse(nova_b)
+        self.assertFalse(nova_c)
+        self.assertEqual(a["notificacao_id"], b["notificacao_id"])
+        self.assertTrue(b["hora_notificacao"].endswith("-03:00"))      # tudo em horário de Brasília
+
+    def test_alerta_e_carimbado_com_o_relogio_do_sistema(self):
+        self.n.declarar_janela({"inicio": "2026-09-21T11:00:00-03:00", "fim": "2026-09-21T11:30:00-03:00",
+                                "tipo": "PICO", "motivo": "teste"})
+        alerta = self.n.alertas.listar()["alertas"][0]
+        self.assertEqual(alerta["em"], "2026-09-21T11:00:00-03:00")    # relógio simulado, não o de parede
+
 
 if __name__ == "__main__":
     unittest.main()
