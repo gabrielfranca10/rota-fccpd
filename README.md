@@ -81,12 +81,5 @@ tests/            test_transito, test_nucleo, test_concorrencia, test_http
 docs/             documentos 01 a 06
 ```
 
-## Antes de entregar (checklist da equipe)
-
-- [ ] Rodar testes e `scripts/carga.py` na máquina de vocês e atualizar os números do doc 04.
-- [ ] Preencher o doc 05 (prompts literais e decisões aceitas/rejeitadas **com as palavras de vocês**).
-- [ ] Cada membro conseguir responder, sem olhar, as perguntas do doc 06.
-- [ ] Ensaiar a apresentação cronometrada (10 min) com a demo ao vivo (dashboard aberto no navegador).
-
 > Aviso: o cálculo de trânsito do protótipo é uma simplificação didática (velocidade constante +
 > fator de pico/bloqueio). Não substitui um serviço de mapas/roteirização real.
