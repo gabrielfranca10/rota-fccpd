@@ -15,7 +15,41 @@ scripts) no ambiente da equipe — não só geração de texto.
 | # | Data | Quem | Prompt (colar o texto literal) | O que a IA produziu | O que a equipe revisou/alterou |
 |---|---|---|---|---|---|
 | 1 | 21/09/2026 | Gabriel França | *(colar)* — pedido: gerar um projeto de tema livre com foco em Computação Paralela, seguindo a rubrica da Entrega 1; construir peça por peça e testar tudo ao final | arquitetura, código, testes, scripts, dashboard e documentação desta entrega, a partir do domínio de despacho de pedidos de delivery | *(preencher)* |
-| 2 | 21/09/2026 | *(preencher)* | "como que roda o projeto" · "eu vou te mandar os requisitos do projeto, e vc verifica se esta faltando alguma coisa" (com a rubrica da Entrega 1 em imagem) · "rode vc o carga.py e veja se esta tudo certo" · "rode TUDO que tiver que rodar para ver se esta tudo certo" · "tem como deixar esse dashboard mais bonito ai nao mano, ta feioso" · "so falta ajeitar o doc 5 ne" · "se tirando a parte dos docs, tem mais alguma coisa que a gnt ta esquecendo? eu quero o codigo perfeito" · (imagem do critério "Single-Node Prototype Execution / Exceeding") "." | explicou como executar o projeto; conferiu os docs 01–06 contra a rubrica e apontou o doc 05 incompleto; rodou testes (3 vezes), `carga.py`, `demo_corrida.py`, `demo_deadlock.py`, `demo.py` e um teste de fumaça da API, todos sem falha; redesenhou o dashboard (`static/dashboard.html`, `.css` e `.js`); registrou esta sessão e o erro E8 neste documento; configurou o CI e gerou os screenshots; revisou o código do núcleo e da API, encontrou seis defeitos (E9 a E14), escreveu os testes antes da correção e corrigiu, atualizando os docs 01 a 04; depois auditou os próprios testes com testes de mutação, achou quatro testes fracos e quatro problemas nos scripts (E15 a E18) e os corrigiu; por fim mediu se o sistema desacelera com o volume (núcleo sem HTTP e por HTTP) e registrou o resultado no doc 04, seção 4.4 | *(preencher)* |
+| 2 | 21/09/2026 | *(preencher)* | *ver a lista 5.1.1 (22 prompts, na ordem em que foram enviados)* | explicou como executar o projeto; conferiu os docs 01–06 contra a rubrica e apontou o doc 05 incompleto; rodou testes (3 vezes), `carga.py`, `demo_corrida.py`, `demo_deadlock.py`, `demo.py` e um teste de fumaça da API, todos sem falha; redesenhou o dashboard (`static/dashboard.html`, `.css` e `.js`); registrou esta sessão e o erro E8 neste documento; configurou o CI e gerou os screenshots; revisou o código do núcleo e da API, encontrou seis defeitos (E9 a E14), escreveu os testes antes da correção e corrigiu, atualizando os docs 01 a 04; depois auditou os próprios testes com testes de mutação, achou quatro testes fracos e quatro problemas nos scripts (E15 a E18) e os corrigiu; por fim mediu se o sistema desacelera com o volume (núcleo sem HTTP e por HTTP) e registrou o resultado no doc 04, seção 4.4 | *(preencher)* |
+
+### 5.1.1 Prompts da sessão 2, na ordem em que foram enviados
+
+Texto literal das mensagens do usuário (com os erros de digitação originais) e o que cada uma gerou.
+A mensagem só com `]` (digitada sem querer) ficou de fora. As mensagens 14, 15 e 16 estão resumidas
+porque incluem endereços de repositórios e instruções sobre autoria de commits.
+
+| # | Prompt | O que a IA fez com ele |
+|---|---|---|
+| 1 | "opa, como que roda o projeto" | leu o README e explicou os comandos (testes, servidor, carga) |
+| 2 | "eu vou te mandar os requisitos do projeto, e vc verifica se esta faltando alguma coisa ok" | combinou o procedimento |
+| 3 | (7 imagens da rubrica) "aqui estao os requisitos, veja se esta tudo certo" | leu os docs 01 a 06, rodou os testes e comparou com a rubrica: apontou o doc 05 incompleto, os números do doc 04 e o ensaio |
+| 4 | "rode vc o carga.py e veja se esta tudo certo" | subiu o servidor, rodou a carga: auditoria `ok`, 175 req/s |
+| 5 | "rode TUDO que tiver que rodar para ver se esta tudo cefto" | testes 3 vezes, `demo_corrida`, `demo_deadlock`, `demo.py` e teste de fumaça da API: sem falhas |
+| 6 | "como que roda o projeto mesmo" | repetiu os comandos, em dois terminais |
+| 7 | "tem como deixar esse dashboard mais bonito ai nao mano, ta feioso" | primeira reformulação do dashboard (tema escuro) |
+| 8 | "so falta ajeitar o doc 5 ne" | explicou o que só a equipe pode preencher e ofereceu registrar a sessão |
+| 9 | "quero por favor" | registrou a sessão 2 e o erro E8; listou as perguntas D1 a D13 |
+| 10 | "divida essas perguntas para gabriel caio fernando" | dividiu as perguntas pelos blocos de fala do doc 06 |
+| 11 | (imagem de outro painel) "voce pode fazer um dashboard nesse estilo? eu quero um dashboard muito bonito" | segunda reformulação do dashboard (tema claro, menu lateral, rosca de status) e screenshots |
+| 12 | "o codigo tem certeza que pode ser em python?" | disse que a rubrica não cita linguagem, recomendou confirmar com o professor e apontou uma frase não verificada no doc 01 |
+| 13 | "se o codigo tiver q ser em java, vc refaz tudo ne? mas sem perder nada" | descreveu como seria portar para Java (não executado: o professor aceitou Python) |
+| 14 | (resumo) pediu para ler o repositório de outra equipe, separar o que é de Requisitos e de Computação Paralela e dizer o que faltava | leu o repositório para comparação (nada foi copiado); concluiu que o painel de admin é só de Requisitos |
+| 15 | (resumo) "eu vou criar o repositorio aqui e voce conecta ok" | verificou git e credenciais e pediu o endereço |
+| 16 | (resumo) URL do repositório e instrução de que os commits saiam somente com a autoria do usuário | `git init` só na pasta do projeto, `.gitignore` e commits sem nenhuma atribuição à IA |
+| 17 | "pode subir assim, sem problemas" | `git push`; conferiu o remoto |
+| 18 | "faz o CI e os screenshots pfv" | workflow do GitHub Actions (testes em 3.10 e 3.13, demos e carga reduzida) e três capturas do dashboard |
+| 19 | "foi sem qrer, eu queria perguntar se tirando a aprte dos docs, tem mais alguma coisa que a gnt ta esquecendo? eu quero o codigo perfeito" | revisão do código: seis defeitos (E9 a E14), testes escritos antes da correção |
+| 20 | "o professor ja confirmou que pode fazer em python, mas eu to falando se ta faltando ALGUM requisito entendeu, e se tem algum erro nos testes, ou em alguma parte do codigo tambem" | testes de mutação: quatro testes fracos e quatro problemas nos scripts (E15 a E18) |
+| 21 | (imagem do critério "Single-Node Prototype Execution / Exceeding") "." | mediu se o sistema desacelera com o volume: doc 04, seção 4.4 |
+| 22 | (imagem do critério "AI Usage / Exceeding") "e esse aqui" | esta lista e a coluna "Onde no código" da seção 5.4 |
+
+O prompt da **sessão 1** (que gerou o projeto) não está registrado aqui: a equipe precisa colar o texto
+original na tabela acima.
 
 ## 5.2 Decisões propostas pela IA
 
@@ -63,14 +97,18 @@ vocês**. Se rejeitarem algo, alterem o código e registrem aqui.
 
 ## 5.4 Checklist de domínio (cada membro deve conseguir explicar sem olhar)
 
-| Tema | Responsável | Pergunta-teste |
-|---|---|---|
-| Arquitetura e threads | | Quantas threads existem e o que cada uma faz? |
-| Deduplicação (R1) | | Por que verificar e inserir precisam estar na mesma seção crítica? |
-| RWLock (R3/R4) | | Por que o worker segura a leitura até gravar o pedido? O que é preferência para escritor? |
-| Capacidade do entregador (R5) | | Por que o ranking pode ser feito sem lock, mas a atribuição não? |
-| Deadlock (R6) | | Quais são as 4 condições de Coffman e qual quebramos? |
-| Fila de espera e despacho | | O que acontece quando todos os entregadores estão cheios? Como um pedido em espera é atendido depois? |
-| Protocolo | | Por que 202 e não 201? Por que REST aqui e gRPC depois? |
-| Cálculo da hora limite | | Como preparo + distância + pico viram uma hora limite? |
-| Verificação | | O que a auditoria confere e o que é o "oráculo sequencial"? |
+Cada responsável abre o código indicado, lê, e escreve na última coluna, **com as próprias palavras e sem
+copiar dos docs**, duas ou três frases respondendo à pergunta-teste. É essa coluna que mostra que a
+equipe entende o trecho, e não só que o código funciona.
+
+| Tema | Onde no código | Responsável | Pergunta-teste | Explicação com as próprias palavras |
+|---|---|---|---|---|
+| Arquitetura e threads | `rota/__main__.py`, `Nucleo.iniciar`, `ServidorComPool` em `http_api.py` | | Quantas threads existem e o que cada uma faz? | |
+| Deduplicação (R1) | `Nucleo.receber_notificacao`, `impressao_digital` | | Por que verificar e inserir precisam estar na mesma seção crítica? | |
+| RWLock (R3/R4) | `rota/rwlock.py`, `Nucleo._processar`, `Nucleo.declarar_janela` | | Por que o worker segura a leitura até gravar o pedido? O que é preferência para escritor? | |
+| Capacidade do entregador (R5) | `Nucleo._tentar_atribuir` | | Por que o ranking pode ser feito sem lock, mas a atribuição não? | |
+| Deadlock (R6) | `Nucleo.redespachar_pedido` | | Quais são as 4 condições de Coffman e qual quebramos? | |
+| Fila de espera e despacho | `Nucleo._tentar_despachar`, `_mais_urgente_em_espera`, `_acordar_fila_espera` | | O que acontece quando todos os entregadores estão cheios? Como um pedido em espera é atendido depois? | |
+| Protocolo | rotas em `rota/http_api.py`, doc 03 | | Por que 202 e não 201? Por que REST aqui e gRPC depois? | |
+| Cálculo da hora limite | `calcular_hora_limite` em `rota/transito.py` | | Como preparo + distância + pico viram uma hora limite? | |
+| Verificação | `Nucleo.auditoria`, `tests/test_concorrencia.py`, `scripts/mutacoes.py` | | O que a auditoria confere e o que é o "oráculo sequencial"? Por que os testes de mutação importam? | |
