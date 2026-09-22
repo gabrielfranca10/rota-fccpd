@@ -1,0 +1,136 @@
+<svg viewBox="0 0 1400 780" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hierarquia de locks L1 a L5: cada thread só pode pedir um lock de nível maior do que os que já tem, o que torna impossível um ciclo de espera. À direita, quatro threads mostram a ordem real em que pedem locks, todas respeitando a hierarquia.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1400" height="780" fill="#ffffff"/>
+
+  <text x="30" y="30" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#0f172a">Hierarquia de locks — regra anti-deadlock</text>
+  <text x="30" y="50" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">só se pode pedir um lock de nível maior do que os que já se tem — impossível formar um ciclo de espera</text>
+
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <!-- L1 -->
+    <rect x="60" y="90" width="420" height="64" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+    <rect x="72" y="102" width="34" height="20" rx="4" fill="#dc2626"/>
+    <text x="89" y="116" text-anchor="middle" font-size="10" fill="#ffffff" font-weight="700">L1</text>
+    <text x="118" y="116" font-size="13" font-weight="600" fill="#7f1d1d">RWLock do trânsito</text>
+    <text x="118" y="134" font-size="10.5" fill="#7f1d1d">leitura: ingestão / recálculo · escrita: janela / auditoria</text>
+
+    <line x1="270" y1="154" x2="270" y2="190" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- L2 -->
+    <rect x="60" y="192" width="420" height="64" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+    <rect x="72" y="204" width="34" height="20" rx="4" fill="#ea580c"/>
+    <text x="89" y="218" text-anchor="middle" font-size="10" fill="#ffffff" font-weight="700">L2</text>
+    <text x="118" y="218" font-size="13" font-weight="600" fill="#7c2d12">Lock do restaurante</text>
+    <text x="118" y="236" font-size="10.5" fill="#7c2d12">no máx. UM por thread — exceto auditoria, em ordem de id</text>
+
+    <line x1="270" y1="256" x2="270" y2="292" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- L3 -->
+    <rect x="60" y="294" width="420" height="64" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+    <rect x="72" y="306" width="34" height="20" rx="4" fill="#ca8a04"/>
+    <text x="89" y="320" text-anchor="middle" font-size="10" fill="#ffffff" font-weight="700">L3</text>
+    <text x="118" y="320" font-size="13" font-weight="600" fill="#713f12">Lock do entregador</text>
+    <text x="118" y="338" font-size="10.5" fill="#713f12">dois de uma vez só em ordem de id · despacho segura no máx. um</text>
+
+    <line x1="270" y1="358" x2="270" y2="394" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- L4 -->
+    <rect x="60" y="396" width="420" height="64" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+    <rect x="72" y="408" width="34" height="20" rx="4" fill="#16a34a"/>
+    <text x="89" y="422" text-anchor="middle" font-size="10" fill="#ffffff" font-weight="700">L4</text>
+    <text x="118" y="422" font-size="13" font-weight="600" fill="#14532d">_indice_lock → _notif_lock</text>
+    <text x="118" y="440" font-size="10.5" fill="#14532d">seções curtas, uma de cada vez</text>
+
+    <line x1="270" y1="460" x2="270" y2="496" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- L5 -->
+    <rect x="60" y="498" width="420" height="64" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <rect x="72" y="510" width="34" height="20" rx="4" fill="#2563eb"/>
+    <text x="89" y="524" text-anchor="middle" font-size="10" fill="#ffffff" font-weight="700">L5</text>
+    <text x="118" y="524" font-size="13" font-weight="600" fill="#1e3a8a">Alertas · Métricas · Relógio simulado</text>
+    <text x="118" y="542" font-size="10.5" fill="#1e3a8a">folhas — nada é pedido depois delas</text>
+  </g>
+
+  <text x="270" y="600" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#64748b">threading.Lock não-reentrante: pedir de novo um lock já em mãos trava de forma visível no teste</text>
+
+  <!-- Rule callout -->
+  <rect x="60" y="630" width="420" height="110" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+  <text x="80" y="656" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0f172a">Caso extremo: auditoria</text>
+  <text x="80" y="676" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">"congela o mundo" pegando TODOS os locks —</text>
+  <text x="80" y="692" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">e mesmo assim não trava, porque pega na mesma</text>
+  <text x="80" y="708" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">ordem total: L1 escrita → todos L2 (ordem de id) →</text>
+  <text x="80" y="724" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">todos L3 (ordem de id) → L4.</text>
+
+  <!-- Right side: example thread paths -->
+  <text x="560" y="90" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Ordem real de aquisição por thread</text>
+
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11">
+    <!-- ingestao -->
+    <text x="560" y="130" font-weight="600" fill="#0f172a">ingestao-N</text>
+    <rect x="560" y="140" width="90" height="30" rx="6" fill="#fef2f2" stroke="#dc2626"/>
+    <text x="605" y="160" text-anchor="middle" fill="#7f1d1d">L1 leitura</text>
+    <line x1="650" y1="155" x2="686" y2="155" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="690" y="140" width="90" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+    <text x="735" y="160" text-anchor="middle" fill="#7c2d12">L2</text>
+    <line x1="780" y1="155" x2="816" y2="155" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="820" y="140" width="90" height="30" rx="6" fill="#fefce8" stroke="#ca8a04"/>
+    <text x="865" y="160" text-anchor="middle" fill="#713f12">L3</text>
+    <text x="930" y="160" fill="#64748b">calcula limite, tenta atribuir</text>
+
+    <!-- despacho -->
+    <text x="560" y="205" font-weight="600" fill="#0f172a">despacho</text>
+    <rect x="560" y="215" width="90" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+    <text x="605" y="235" text-anchor="middle" fill="#7c2d12">L2</text>
+    <line x1="650" y1="230" x2="686" y2="230" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="690" y="215" width="90" height="30" rx="6" fill="#fefce8" stroke="#ca8a04"/>
+    <text x="735" y="235" text-anchor="middle" fill="#713f12">L3 (1×)</text>
+    <text x="850" y="235" fill="#64748b">atribui o mais urgente da espera</text>
+
+    <!-- recalculo -->
+    <text x="560" y="280" font-weight="600" fill="#0f172a">recalculo</text>
+    <rect x="560" y="290" width="90" height="30" rx="6" fill="#fef2f2" stroke="#dc2626"/>
+    <text x="605" y="310" text-anchor="middle" fill="#7f1d1d">L1 escrita</text>
+    <line x1="650" y1="305" x2="686" y2="305" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="690" y="290" width="90" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+    <text x="735" y="310" text-anchor="middle" fill="#7c2d12">L2 (cada)</text>
+    <text x="850" y="310" fill="#64748b">troca versão, revisa pedidos abertos</text>
+
+    <!-- redespacho -->
+    <text x="560" y="355" font-weight="600" fill="#0f172a">http — redespachar_pedido</text>
+    <rect x="560" y="365" width="90" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+    <text x="605" y="385" text-anchor="middle" fill="#7c2d12">L2</text>
+    <line x1="650" y1="380" x2="686" y2="380" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="690" y="365" width="180" height="30" rx="6" fill="#fefce8" stroke="#ca8a04"/>
+    <text x="780" y="385" text-anchor="middle" fill="#713f12">L3 origem + L3 destino, id↑</text>
+    <text x="890" y="385" fill="#64748b"></text>
+    <text x="560" y="404" font-size="9.5" fill="#64748b">quebra a espera circular do R6: sempre origem/destino em ordem crescente de entregador_id</text>
+
+    <!-- auditoria -->
+    <text x="560" y="440" font-weight="600" fill="#0f172a">auditoria</text>
+    <rect x="560" y="450" width="90" height="30" rx="6" fill="#fef2f2" stroke="#dc2626"/>
+    <text x="605" y="470" text-anchor="middle" fill="#7f1d1d">L1 escrita</text>
+    <line x1="650" y1="465" x2="686" y2="465" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="690" y="450" width="120" height="30" rx="6" fill="#fff7ed" stroke="#ea580c"/>
+    <text x="750" y="470" text-anchor="middle" fill="#7c2d12">todos L2 (id↑)</text>
+    <line x1="810" y1="465" x2="846" y2="465" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="850" y="450" width="120" height="30" rx="6" fill="#fefce8" stroke="#ca8a04"/>
+    <text x="910" y="470" text-anchor="middle" fill="#713f12">todos L3 (id↑)</text>
+    <line x1="970" y1="465" x2="1006" y2="465" stroke="#475569" marker-end="url(#arrow)"/>
+    <rect x="1010" y="450" width="90" height="30" rx="6" fill="#f0fdf4" stroke="#16a34a"/>
+    <text x="1055" y="470" text-anchor="middle" fill="#14532d">L4</text>
+    <text x="560" y="494" font-size="9.5" fill="#64748b">"congela o mundo" — prova de que a própria ordem total evita deadlock mesmo no pior caso</text>
+  </g>
+
+  <rect x="560" y="540" width="560" height="200" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+  <text x="580" y="566" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#0f172a">Por que funciona (R6 — deadlock no redespacho cruzado)</text>
+  <text x="580" y="590" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">Sem ordem: Thread 1 trava João e espera Márcia; Thread 2</text>
+  <text x="580" y="608" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">trava Márcia e espera João → espera circular → deadlock.</text>
+  <text x="580" y="632" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">Com ordem crescente de id: as duas threads tentam travar</text>
+  <text x="580" y="650" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">o mesmo entregador primeiro — uma espera a outra terminar,</text>
+  <text x="580" y="668" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155">nunca as duas travam metade e esperam a outra metade.</text>
+  <text x="580" y="692" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155" font-style="italic">Mesma ideia, em escala, entre L1…L5: nenhuma thread pode</text>
+  <text x="580" y="710" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#334155" font-style="italic">pedir um lock "acima" na hierarquia de um que já segura.</text>
+</svg>

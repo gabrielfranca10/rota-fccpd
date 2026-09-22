@@ -1,0 +1,117 @@
+<svg viewBox="0 0 1440 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Comparação de sequência do risco R5: sem lock, dois workers de ingestão leem a mesma agenda com 3 de 4 vagas e ambos inserem, estourando a capacidade para 5. Com o lock do entregador, a segunda thread espera, vê a agenda já em 4 de 4 e tenta o próximo candidato.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1440" height="640" fill="#ffffff"/>
+
+  <text x="720" y="26" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#0f172a">R5 — despachar além da capacidade do entregador</text>
+
+  <line x1="720" y1="42" x2="720" y2="600" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+  <!-- ================= LEFT PANEL ================= -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="30" y="62" font-size="14" font-weight="700" fill="#b91c1c">✗ sem proteção — verificar-e-agir</text>
+
+    <!-- lifelines -->
+    <rect x="80" y="76" width="150" height="34" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="155" y="98" text-anchor="middle" font-size="11" fill="#1e3a8a">ingestão (pedido X)</text>
+    <rect x="290" y="76" width="150" height="34" rx="6" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <text x="365" y="98" text-anchor="middle" font-size="11" fill="#0f172a">agenda do João</text>
+    <rect x="500" y="76" width="150" height="34" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="575" y="98" text-anchor="middle" font-size="11" fill="#1e3a8a">ingestão (pedido Y)</text>
+
+    <line x1="155" y1="110" x2="155" y2="500" stroke="#94a3b8" stroke-width="1.2"/>
+    <line x1="365" y1="110" x2="365" y2="500" stroke="#94a3b8" stroke-width="1.2"/>
+    <line x1="575" y1="110" x2="575" y2="500" stroke="#94a3b8" stroke-width="1.2"/>
+
+    <!-- state annotations on resource lifeline -->
+    <text x="378" y="146" font-size="10" fill="#64748b">estado: 3/4</text>
+
+    <!-- t1: both read, no lock -->
+    <text x="30" y="150" font-size="10" fill="#94a3b8">t1</text>
+    <line x1="155" y1="150" x2="358" y2="150" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+    <text x="160" y="142" font-size="10" fill="#334155">lê agenda: 3/4 (sem lock)</text>
+
+    <line x1="575" y1="176" x2="372" y2="176" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+    <text x="420" y="192" font-size="10" fill="#334155">lê agenda: 3/4 (sem lock)</text>
+
+    <!-- t2: X writes -->
+    <text x="30" y="260" font-size="10" fill="#94a3b8">t2</text>
+    <line x1="155" y1="260" x2="358" y2="260" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="160" y="252" font-size="10" fill="#334155" font-weight="600">insere → agenda: 4/4</text>
+
+    <!-- t3: Y writes, overshoot -->
+    <text x="30" y="330" font-size="10" fill="#94a3b8">t3</text>
+    <line x1="575" y1="330" x2="372" y2="330" stroke="#dc2626" stroke-width="1.8" marker-end="url(#arrowRed)"/>
+    <text x="420" y="322" font-size="10" fill="#b91c1c" font-weight="700">insere → agenda: 5/4 ⚠</text>
+
+    <circle cx="365" cy="345" r="16" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="365" y="350" text-anchor="middle" font-size="14" fill="#dc2626" font-weight="700">!</text>
+
+    <!-- callout -->
+    <rect x="40" y="420" width="640" height="94" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="60" y="444" font-size="12" font-weight="700" fill="#7f1d1d">Resultado: capacidade estourada</text>
+    <text x="60" y="464" font-size="11" fill="#7f1d1d">X e Y viram a mesma foto (3/4) porque ler o tamanho da agenda e inserir</text>
+    <text x="60" y="482" font-size="11" fill="#7f1d1d">não formam uma seção crítica única — o SO pode trocar de thread entre</text>
+    <text x="60" y="500" font-size="11" fill="#7f1d1d">as duas. Capacidade 4, agenda com 5 pedidos.</text>
+  </g>
+
+  <!-- ================= RIGHT PANEL ================= -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="750" y="62" font-size="14" font-weight="700" fill="#15803d">✓ com o lock do entregador (L3)</text>
+
+    <rect x="800" y="76" width="150" height="34" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="875" y="98" text-anchor="middle" font-size="11" fill="#1e3a8a">ingestão (pedido X)</text>
+    <rect x="1010" y="76" width="150" height="34" rx="6" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <text x="1085" y="98" text-anchor="middle" font-size="11" fill="#0f172a">agenda do João</text>
+    <rect x="1220" y="76" width="150" height="34" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="1295" y="98" text-anchor="middle" font-size="11" fill="#1e3a8a">ingestão (pedido Y)</text>
+
+    <line x1="875" y1="110" x2="875" y2="560" stroke="#94a3b8" stroke-width="1.2"/>
+    <line x1="1085" y1="110" x2="1085" y2="560" stroke="#94a3b8" stroke-width="1.2"/>
+    <line x1="1295" y1="110" x2="1295" y2="560" stroke="#94a3b8" stroke-width="1.2"/>
+
+    <!-- activation bar X holds lock 130-260 -->
+    <rect x="1079" y="128" width="12" height="132" rx="3" fill="#bbf7d0" stroke="#16a34a" stroke-width="1.3"/>
+    <!-- activation bar Y holds lock 300-430 -->
+    <rect x="1079" y="300" width="12" height="130" rx="3" fill="#bfdbfe" stroke="#2563eb" stroke-width="1.3"/>
+
+    <text x="30" y="132" font-size="10" fill="#94a3b8"></text>
+    <text x="720" y="132" font-size="10" fill="#94a3b8">t1</text>
+    <line x1="875" y1="132" x2="1076" y2="132" stroke="#16a34a" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="880" y="124" font-size="10" fill="#14532d" font-weight="600">lock(João) — adquire</text>
+
+    <line x1="1295" y1="150" x2="1160" y2="150" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4 3"/>
+    <text x="1160" y="146" text-anchor="end" font-size="10" fill="#64748b">lock(João) — espera X liberar</text>
+
+    <text x="900" y="176" font-size="10" fill="#14532d">checa 3&lt;4 → insere → 4/4</text>
+    <text x="720" y="200" font-size="10" fill="#94a3b8">t2</text>
+    <line x1="875" y1="204" x2="1076" y2="204" stroke="#16a34a" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <text x="880" y="220" font-size="10" fill="#14532d">unlock(João)</text>
+    <line x1="1091" y1="256" x2="878" y2="256" stroke="#16a34a" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+
+    <text x="720" y="304" font-size="10" fill="#94a3b8">t3</text>
+    <line x1="1295" y1="304" x2="1096" y2="304" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="1160" y="296" text-anchor="end" font-size="10" fill="#1e3a8a" font-weight="600">lock(João) — adquire agora</text>
+
+    <text x="1120" y="336" font-size="10" fill="#1e3a8a">checa 4&lt;4 → falso</text>
+    <text x="720" y="366" font-size="10" fill="#94a3b8">t4</text>
+    <text x="1120" y="366" font-size="10" fill="#1e3a8a" font-weight="600">tenta o próximo candidato</text>
+    <text x="1120" y="382" font-size="10" fill="#1e3a8a">(sem vaga em ninguém → fila de espera)</text>
+
+    <line x1="1091" y1="426" x2="1298" y2="426" stroke="#2563eb" stroke-width="1.3" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+    <text x="1150" y="420" font-size="10" fill="#1e3a8a">unlock(João)</text>
+
+    <!-- callout -->
+    <rect x="760" y="480" width="640" height="94" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="780" y="504" font-size="12" font-weight="700" fill="#14532d">Resultado: capacidade nunca ultrapassa 4</text>
+    <text x="780" y="524" font-size="11" fill="#14532d">Checar `len(agenda) &lt; capacidade` e inserir acontece na MESMA seção</text>
+    <text x="780" y="542" font-size="11" fill="#14532d">crítica (`_tentar_atribuir`, sob o lock daquele entregador). Y só decide</text>
+    <text x="780" y="560" font-size="11" fill="#14532d">depois de X liberar — vê o estado real, não uma foto desatualizada.</text>
+  </g>
+</svg>

@@ -53,6 +53,8 @@ Autenticação/autorização, persistência em banco, geolocalização real (a d
 
 ## 1.3 Modelo de domínio
 
+![Modelo de domínio: entidades, ciclo de vida da notificação e as duas dimensões independentes do status do pedido](img/modelo-dominio.svg)
+
 ```
  Entregador 1 ──── N Pedido N ──── 1 Restaurante 1 ──── N Pedido N ──── 1 Notificação
    │ agenda (pedidos em aberto, até `capacidade`)
@@ -79,6 +81,8 @@ Decisões importantes:
 3. A atribuição de entregador é uma dimensão **separada** do status de prazo: um pedido pode estar `NO_PRAZO` e ainda `aguardando entregador` — o relógio não espera a frota ter vaga.
 
 ## 1.4 Arquitetura do protótipo (um processo, várias threads)
+
+![Arquitetura do protótipo: um processo Python com pool HTTP, fila de ingestão, workers, RWLock do trânsito, locks por restaurante e por entregador, fila de espera, despacho e monitor](img/arquitetura-prototipo.svg)
 
 ```
                         Clientes (app do entregador, integrações das plataformas, script de carga)
@@ -144,6 +148,8 @@ Decisões importantes:
 | Protocolo externo | **REST + JSON** | gRPC | Ver doc 03: REST na borda, gRPC no miolo a partir da Entrega 2. |
 
 ## 1.6 Arquitetura-alvo (distribuída) — para onde o protótipo evolui
+
+![Arquitetura-alvo distribuída: gateway e API sem estado, fila durável, Serviço de Pedidos particionado por restaurante, Frota e stream de pedidos em risco, com o mapeamento de cada peça do protótipo](img/arquitetura-alvo.svg)
 
 ```
    Plataformas (iFood, Uber Eats...)   App do entregador

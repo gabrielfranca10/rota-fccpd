@@ -64,6 +64,8 @@ Com ingestão contínua sempre há algum leitor ativo; um RWLock ingênuo nunca 
 
 ### R5 — Despachar além da capacidade do entregador (a corrida específica deste domínio)
 
+![Sequência da corrida do R5 sem lock (capacidade estourada) comparada com a versão corrigida usando o lock do entregador](img/corrida-r5-capacidade.svg)
+
 | t | Worker de ingestão (pedido X) | Worker de ingestão (pedido Y) |
 |---|---|---|
 | 1 | vê agenda do João com 3/4 vagas ocupadas | vê agenda do João com 3/4 vagas ocupadas (ainda não gravou) |
@@ -133,6 +135,8 @@ Horário de parede pode ser ajustado (NTP). **Solução:** datas civis de Brasí
 Quando um entregador confirma uma entrega, abre-se uma vaga e vários pedidos esperam por ela. Se a escolha depender da ordem de chegada na fila (ou da ordem arbitrária de um conjunto), a vaga pode ir para um pedido com folga enquanto outro, a poucos minutos de estourar o prazo, continua esperando — justamente o que o sistema existe para evitar. **Solução:** a fila de despacho carrega só um sinal ("pode haver vaga"); o worker olha se há vaga (leitura otimista, sem lock) e, havendo, escolhe o pedido em espera com a **menor hora limite** (`_mais_urgente_em_espera`, sob `_indice_lock`), trava o restaurante dele (L2) e só então decide, sob o lock do entregador (L3), se a vaga ainda existe. Um único sinal preenche todas as vagas abertas. A hora limite é lida sem o L2: um recálculo concorrente pode deixar o ranking levemente defasado, mas a atribuição em si continua sendo decidida sob os locks (R5). **Prova:** `test_vaga_liberada_vai_para_o_pedido_mais_urgente` e `test_varias_vagas_vao_para_os_mais_urgentes_em_ordem`. Os dois falhavam no código anterior (numa execução, a vaga foi para um pedido com prazo 19 min depois do mais urgente).
 
 ## 2.4 Hierarquia de locks (regra anti-deadlock)
+
+![Hierarquia de locks L1 a L5 e a ordem real de aquisição por cada thread](img/hierarquia-locks.svg)
 
 ```
 L1  RWLock do trânsito         (leitura: ingestão/recálculo · escrita: janela/auditoria)

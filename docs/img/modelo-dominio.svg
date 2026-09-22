@@ -1,0 +1,129 @@
+<svg viewBox="0 0 1400 940" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Modelo de domínio: Pedido no centro, ligado a Restaurante, Entregador e Notificação; a notificação vira PENDENTE, PROCESSADA, SEM_PEDIDO, NAO_VINCULADA ou ERRO; e o pedido tem duas dimensões independentes de estado, o prazo derivado do relógio e a atribuição de entregador.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1400" height="940" fill="#ffffff"/>
+
+  <text x="30" y="30" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#0f172a">Modelo de domínio</text>
+  <text x="30" y="50" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">entidades, ciclo de vida da notificação e as duas dimensões independentes do status do pedido</text>
+
+  <!-- ============ ROW 1: entity hub ============ -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="30" y="86" font-size="13" font-weight="700" fill="#0f172a">1.1 Entidades</text>
+
+    <rect x="240" y="100" width="200" height="70" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <text x="340" y="128" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">Restaurante</text>
+    <text x="340" y="146" text-anchor="middle" font-size="10" fill="#334155">cardápio, cadastro</text>
+
+    <rect x="600" y="100" width="200" height="70" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="700" y="128" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a8a">Pedido</text>
+    <text x="700" y="146" text-anchor="middle" font-size="10" fill="#1e3a8a">hora_limite_entrega · transito_versao</text>
+
+    <rect x="960" y="100" width="200" height="70" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <text x="1060" y="128" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">Entregador</text>
+    <text x="1060" y="146" text-anchor="middle" font-size="10" fill="#334155">agenda, capacidade</text>
+
+    <rect x="600" y="230" width="200" height="70" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <text x="700" y="258" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">Notificação</text>
+    <text x="700" y="276" text-anchor="middle" font-size="10" fill="#334155">webhook da plataforma</text>
+
+    <line x1="440" y1="135" x2="596" y2="135" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="460" y="127" font-size="10" fill="#334155">1</text>
+    <text x="570" y="127" font-size="10" fill="#334155">N</text>
+    <text x="460" y="150" font-size="10" fill="#64748b">vinculado ao cadastro (RF3)</text>
+
+    <line x1="804" y1="135" x2="956" y2="135" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="820" y="127" font-size="10" fill="#334155">N</text>
+    <text x="932" y="127" font-size="10" fill="#334155">1</text>
+    <text x="815" y="152" font-size="9.5" fill="#64748b">agenda até capacidade;</text>
+    <text x="815" y="165" font-size="9.5" fill="#64748b">redespacho troca o dono</text>
+
+    <line x1="700" y1="226" x2="700" y2="174" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="712" y="216" font-size="10" fill="#334155">0..1</text>
+    <text x="712" y="192" font-size="10" fill="#334155">1</text>
+    <text x="740" y="204" font-size="10" fill="#64748b">gera (dedup por impressão digital)</text>
+  </g>
+
+  <line x1="0" y1="330" x2="1400" y2="330" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- ============ ROW 2: notificacao state machine ============ -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="30" y="366" font-size="13" font-weight="700" fill="#0f172a">1.2 Ciclo de vida da notificação</text>
+
+    <rect x="80" y="420" width="160" height="52" rx="26" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+    <text x="160" y="451" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">PENDENTE</text>
+
+    <line x1="240" y1="446" x2="340" y2="396" stroke="#475569" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="240" y1="446" x2="340" y2="452" stroke="#475569" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="240" y1="446" x2="340" y2="508" stroke="#475569" stroke-width="1.3" marker-end="url(#arrow)"/>
+    <line x1="240" y1="446" x2="340" y2="562" stroke="#475569" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="340" y="372" width="230" height="48" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+    <text x="455" y="393" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">PROCESSADA</text>
+    <text x="455" y="409" text-anchor="middle" font-size="9.5" fill="#065f46">gerou pedido</text>
+
+    <rect x="340" y="428" width="230" height="48" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <text x="455" y="449" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">SEM_PEDIDO</text>
+    <text x="455" y="465" text-anchor="middle" font-size="9" fill="#334155">informativa (ex.: cancelamento)</text>
+
+    <rect x="340" y="484" width="230" height="48" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="455" y="505" text-anchor="middle" font-size="11" font-weight="600" fill="#7c2d12">NAO_VINCULADA</text>
+    <text x="455" y="521" text-anchor="middle" font-size="9" fill="#7c2d12">restaurante não cadastrado → triagem</text>
+
+    <rect x="340" y="540" width="230" height="44" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="455" y="566" text-anchor="middle" font-size="11" font-weight="600" fill="#7f1d1d">ERRO</text>
+  </g>
+
+  <line x1="0" y1="600" x2="1400" y2="600" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- ============ ROW 3: pedido two independent dimensions ============ -->
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="30" y="636" font-size="13" font-weight="700" fill="#0f172a">1.3 Pedido — status DERIVADO do relógio, duas dimensões independentes</text>
+    <text x="30" y="654" font-size="10.5" fill="#64748b">um pedido pode estar NO_PRAZO e, ao mesmo tempo, aguardando entregador — o relógio não espera a frota ter vaga</text>
+
+    <!-- dimension A: prazo -->
+    <text x="60" y="692" font-size="11.5" font-weight="700" fill="#334155">A · prazo (calculado a cada consulta, nunca armazenado)</text>
+
+    <rect x="60" y="704" width="150" height="46" rx="23" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+    <text x="135" y="732" text-anchor="middle" font-size="11" font-weight="600" fill="#065f46">NO_PRAZO</text>
+
+    <line x1="210" y1="727" x2="266" y2="727" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="238" y="719" text-anchor="middle" font-size="9" fill="#334155">faltam ≤ janela</text>
+
+    <rect x="270" y="704" width="150" height="46" rx="23" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+    <text x="345" y="732" text-anchor="middle" font-size="11" font-weight="600" fill="#78350f">EM_RISCO</text>
+
+    <line x1="420" y1="727" x2="476" y2="727" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="448" y="719" text-anchor="middle" font-size="9" fill="#334155">passou o limite</text>
+
+    <rect x="480" y="704" width="150" height="46" rx="23" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="555" y="732" text-anchor="middle" font-size="11" font-weight="600" fill="#7f1d1d">ATRASADO</text>
+
+    <path d="M135,750 C 135,805 550,825 700,790" fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M345,750 C 345,795 550,812 700,790" fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M555,750 C 560,762 600,772 696,786" fill="none" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="430" y="845" text-anchor="middle" font-size="9.5" fill="#64748b">confirmação de entrega (código) — nunca recusada por estar atrasada</text>
+
+    <rect x="700" y="766" width="180" height="46" rx="23" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="790" y="794" text-anchor="middle" font-size="11" font-weight="600" fill="#1e3a8a">ENTREGUE</text>
+
+    <!-- dimension B: atribuicao -->
+    <text x="960" y="692" font-size="11.5" font-weight="700" fill="#334155">B · atribuição de entregador (dimensão separada do prazo)</text>
+
+    <rect x="960" y="704" width="200" height="46" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <text x="1060" y="726" text-anchor="middle" font-size="11" font-weight="600" fill="#0f172a">sem entregador</text>
+    <text x="1060" y="742" text-anchor="middle" font-size="8.5" fill="#334155">id=None · na fila _aguardando</text>
+
+    <line x1="1160" y1="727" x2="1206" y2="727" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <text x="1183" y="719" text-anchor="middle" font-size="9" fill="#334155">vaga livre</text>
+
+    <rect x="1210" y="704" width="150" height="46" rx="23" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.5"/>
+    <text x="1285" y="732" text-anchor="middle" font-size="11" font-weight="600" fill="#115e59">atribuído</text>
+
+    <text x="960" y="780" font-size="9.5" fill="#64748b">independente do prazo: um pedido</text>
+    <text x="960" y="794" font-size="9.5" fill="#64748b">ATRASADO pode estar atribuído, e um</text>
+    <text x="960" y="808" font-size="9.5" fill="#64748b">NO_PRAZO pode estar sem entregador</text>
+  </g>
+</svg>
