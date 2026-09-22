@@ -179,4 +179,5 @@ Decisões importantes:
 * Estado em memória: reiniciar o processo apaga tudo (proposital nesta entrega).
 * Cálculo de trânsito simplificado (velocidade constante + fator de pico/bloqueio; não é um roteirizador real). **Não substitui um serviço de mapas real.**
 * Índices de notificações crescem sem limite (sem expurgo); aceitável para o protótipo.
+* O monitor, a listagem, as estatísticas e a auditoria percorrem todo o estado: custo linear no número de pedidos (medido no doc 04, seção 4.4). A ingestão em si não desacelera.
 * O GIL do CPython impede paralelismo de CPU entre threads; o ganho aqui é concorrência (sobreposição de espera). Paralelismo real é tema de entregas futuras (processos/nós).

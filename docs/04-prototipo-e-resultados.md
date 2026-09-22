@@ -161,7 +161,36 @@ primeiros por hora limite), 3 694 aguardando entregador e os quatro entregadores
 
 <img src="img/dashboard-celular.png" alt="Dashboard em tela estreita" width="320">
 
-## 4.4 Limitações conhecidas (e em que entrega serão tratadas)
+## 4.4 O sistema desacelera com o volume? (medido)
+
+Duas medições, porque a pergunta tem duas respostas.
+
+**O núcleo (sem HTTP).** 8 threads enviam lotes de 10 000 notificações **distintas** (o estado só cresce),
+4 workers de ingestão, Windows 11 e Python 3.13. Depois de cada lote medimos o custo de cada operação:
+
+| pedidos no sistema | ingestão (notif/s) | monitor (1 volta) | listar 1 000 | estatísticas | auditoria |
+|---:|---:|---:|---:|---:|---:|
+| 10 000 | 5 828 | 20 ms | 55 ms | 3 ms | 503 ms |
+| 40 000 | 3 967 | 86 ms | 265 ms | 11 ms | 2 321 ms |
+| 80 000 | 5 712 | 220 ms | 517 ms | 23 ms | 4 692 ms |
+
+* **A ingestão não desacelera**: fica entre ~4 000 e ~5 800 notificações/s de 10 mil a 80 mil pedidos
+  (a oscilação é ruído da máquina, não tendência).
+* **O que cresce é o que percorre o estado inteiro**: a volta do monitor (1 por segundo), a listagem
+  do dashboard, as estatísticas e a auditoria têm custo **linear** no número de pedidos. Na escala da
+  demonstração (alguns milhares de pedidos) são dezenas de milissegundos; a auditoria "congela o
+  mundo" de propósito e só roda sob demanda.
+* Caminho para tirar o custo linear (fora desta entrega): fila de prazos ordenada (heap) para o monitor
+  só visitar quem está perto de mudar de nível, índice ordenado para a listagem e contadores
+  incrementais para as estatísticas.
+
+**Por HTTP no Windows.** O `req/s` da carga **varia muito entre execuções** (604, 267 e 288 req/s em
+três rodadas seguidas, com o mesmo servidor e o mesmo código). Não é o servidor: cada requisição abre
+uma conexão nova (HTTP/1.0, escolha do doc 03) e, depois de milhares de execuções seguidas, o Windows
+fica com 9 a 17 mil sockets em `TIME_WAIT` e o cliente quase esgota as portas efêmeras. Na demonstração,
+rodem a carga **uma vez**, com o servidor recém-iniciado; repetir em sequência faz o `req/s` cair.
+
+## 4.5 Limitações conhecidas (e em que entrega serão tratadas)
 
 | Limitação | Por quê é aceitável agora | Plano |
 |---|---|---|
@@ -170,4 +199,5 @@ primeiros por hora limite), 3 694 aguardando entregador e os quatro entregadores
 | Sem autenticação | fora do escopo de concorrência | gateway/BFF com autenticação |
 | Cálculo de trânsito simplificado (velocidade constante + fator de pico/bloqueio) | foco da disciplina é concorrência | integração com serviço de mapas real |
 | Notificações e alertas crescem sem limite de tempo | volume do protótipo é pequeno | retenção/arquivamento |
+| Monitor, listagem, estatísticas e auditoria percorrem todo o estado (custo linear; ver 4.4) | na escala da demo custam dezenas de ms | heap de prazos, índice ordenado e contadores incrementais |
 | Frota pequena por padrão (4 entregadores) faz a maioria dos pedidos ficar "aguardando" sob carga alta | evidencia o comportamento real do sistema sob escassez de recurso, que é justamente o que a disciplina quer expor | `--restaurantes`/seed configuráveis; dimensionamento de frota fica para um estudo de capacidade futuro |

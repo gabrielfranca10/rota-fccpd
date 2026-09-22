@@ -30,6 +30,8 @@ python scripts/carga.py             # ~5 mil requisições + auditoria
 ```
 **Plano B:** se algo falhar ao vivo, mostrem a saída gravada no doc 04 (tirem prints no ensaio).
 
+**Cuidado com o `carga.py` no Windows:** rodem **uma vez**, com o servidor recém-iniciado. Repetir várias vezes em sequência esgota as portas efêmeras (sockets em `TIME_WAIT`) e o `req/s` cai para menos da metade, sem que nada esteja errado no servidor (doc 04, seção 4.4). Se precisarem repetir, esperem alguns minutos.
+
 ## 6.3 Perguntas prováveis e respostas
 
 **1. Por que usar lock se o Python tem GIL?**
@@ -89,5 +91,8 @@ Pico: o trajeto fica mais lento (fator de velocidade reduzido), mas o entregador
 **19. Os 409 do teste de carga são erros?**
 Não. Um redespacho pediu um entregador que, entre o pedido chegar e a decisão ser tomada, já tinha ficado no limite de capacidade. O sistema detecta o estado mudado e recusa: é a concorrência sendo tratada corretamente.
 
-**20. Onde a IA ajudou e o que vocês mudaram?**
+**20. O sistema desacelera quando o volume cresce?**
+A ingestão não: ficou entre ~4 000 e ~5 800 notificações/s de 10 mil a 80 mil pedidos (medido sem HTTP). O que cresce, de forma linear, é o que percorre o estado inteiro: a volta do monitor, a listagem do dashboard, as estatísticas e a auditoria. Na escala da demonstração são dezenas de milissegundos; para escalar mais, o monitor viraria uma fila de prazos ordenada. O `req/s` por HTTP varia entre execuções no Windows por causa das portas efêmeras (`TIME_WAIT`), não do servidor.
+
+**21. Onde a IA ajudou e o que vocês mudaram?**
 Responder com o doc 05 — com as decisões que **vocês** registraram.
